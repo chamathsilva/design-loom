@@ -1,0 +1,14 @@
+{
+  "name": "design-loom-spike",
+  "owner": {
+    "name": "Design Loom maintainers"
+  },
+  "plugins": [
+    {
+      "name": "design-loom-spike",
+      "version": "0.0.1",
+      "description": "Throwaway B00 spike for the Copilot app route. Not for production use.",
+      "source": "./spikes/b00-app-route/plugin"
+    }
+  ]
+}
