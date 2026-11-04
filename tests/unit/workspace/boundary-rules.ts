@@ -2,7 +2,8 @@
 // Kept separate from the tests so negative cases can exercise the checker directly.
 //
 // This is a pattern-based guard rail, not a sandbox: it catches the usual ways of
-// importing or loading I/O modules, and code review covers anything more creative.
+// importing or loading I/O modules, and code review covers anything more creative
+// (for example an aliased global such as `const f = fetch; f(url)`).
 
 import { builtinModules } from "node:module";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
@@ -30,6 +31,8 @@ const IO_BUILTINS: ReadonlySet<string> = new Set([
   "module",
   "net",
   "os",
+  "perf_hooks",
+  "process",
   "readline",
   "repl",
   "sqlite",
@@ -45,11 +48,26 @@ const BUILTINS: ReadonlySet<string> = new Set(builtinModules);
 
 /** Globals and helpers that perform I/O or load modules without a static import. */
 const IO_GLOBAL_PATTERNS: ReadonlyArray<[RegExp, string]> = [
-  // The lookbehind skips method calls such as store.fetch(...).
+  // The lookbehind skips ordinary methods such as store.fetch(...); global receivers are listed explicitly.
   [/(?<![.\w$])(?:fetch|WebSocket|EventSource)\s*\(/, "calls a network global"],
+  [/\b(?:globalThis|self|window|global)\s*\.\s*(?:fetch|WebSocket|EventSource)\b/, "uses a network global"],
   [/\bnew\s+(?:WebSocket|EventSource)\b/, "constructs a network client"],
   [/\bgetBuiltinModule\b/, "loads a built-in through process.getBuiltinModule"],
   [/\bcreateRequire\b/, "creates a require function"],
+];
+
+/**
+ * Sources of non-determinism that pure packages must not read (design DL-Q01: same inputs, same
+ * outputs). Time, randomness, environment and host details are passed in by cli or integrations.
+ */
+const NONDETERMINISTIC_PATTERNS: ReadonlyArray<[RegExp, string]> = [
+  [/(?<![.\w$])process\s*\./, "reads the process object"],
+  [/\bDate\s*\.\s*now\b|\bnew\s+Date\s*\(\s*\)/, "reads the current time"],
+  [/\bperformance\s*\.\s*now\b/, "reads a timer"],
+  [
+    /\bMath\s*\.\s*random\b|\bcrypto\s*\.\s*(?:randomUUID|getRandomValues)\b|\brandom(?:Bytes|UUID|Int)\s*\(/,
+    "uses randomness",
+  ],
 ];
 
 /** import(...) or require(...) calls whose whole first argument isn't one string literal. */
@@ -124,7 +142,7 @@ export function sourceViolations(source: string, ctx: FileContext): string[] {
     reasons.push(`${ctx.packageDir} loads a module from a non-literal specifier, which can't be checked`);
   }
   if (!MAY_DO_IO.has(ctx.packageDir)) {
-    for (const [pattern, description] of IO_GLOBAL_PATTERNS) {
+    for (const [pattern, description] of [...IO_GLOBAL_PATTERNS, ...NONDETERMINISTIC_PATTERNS]) {
       if (pattern.test(source)) reasons.push(`pure package ${ctx.packageDir} ${description}`);
     }
   }

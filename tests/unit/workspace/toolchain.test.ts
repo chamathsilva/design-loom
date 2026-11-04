@@ -1,6 +1,7 @@
 // Toolchain pins that keep installs and digests reproducible (backlog B01, DL-Q01, DL-Q04).
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -68,4 +69,15 @@ test("development tools are pinned exactly and installs enforce engines", () => 
 
 test("text files are stored with LF line endings on every platform", () => {
   assert.match(read(".gitattributes"), /^\* text=auto eol=lf$/m);
+});
+
+test("checked-out text files contain no carriage returns", () => {
+  // Proves the rule above on each CI platform, using the files Git actually checked out.
+  const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: ROOT, encoding: "utf8" }).split("\0").filter(Boolean);
+  const textFiles = tracked.filter((file) =>
+    /\.(?:ts|json|md|ya?ml|txt)$|(?:^|\/)\.(?:nvmrc|npmrc|gitignore|gitattributes|editorconfig)$/.test(file),
+  );
+  assert.ok(textFiles.length > 0);
+  const withCr = textFiles.filter((file) => readFileSync(join(ROOT, file)).includes(0x0d));
+  assert.deepEqual(withCr, []);
 });
