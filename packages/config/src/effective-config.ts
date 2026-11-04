@@ -12,7 +12,7 @@
 import { type SchemaKind, validateAgainstSchema } from "@design-loom/validation";
 import { CanonicalJsonError, canonicalDigest, compareCodePoints, type JsonValue } from "./canonical-json.ts";
 import { type Diagnostic, diagnostic, hasErrors, pointerPath, pointerToken, sortDiagnostics } from "./diagnostics.ts";
-import { caseFoldKey, normalizeRelativePath } from "./paths.ts";
+import { caseFoldKey, findCaseFoldCollisions, normalizeRelativePath } from "./paths.ts";
 import { parseRange, parseVersion, satisfiesRange } from "./version-range.ts";
 
 export const EFFECTIVE_CONFIG_SCHEMA_VERSION = "1.0";
@@ -168,6 +168,7 @@ interface WorkflowView {
 interface TemplateView {
   id: string;
   artifact_type: string;
+  sections: { heading: string; required: boolean }[];
 }
 
 interface ExtensionResource {
@@ -260,7 +261,7 @@ export function extensionDeclaredFiles(manifest: unknown): { files: string[]; pr
     return { files: [], problems: result.issues.map((issue) => `${issue.instancePath}: ${issue.message}`) };
   const view = manifest as ExtensionView;
   const problems: string[] = [];
-  const files = new Map<string, string>();
+  const files = new Set<string>();
   const add = (raw: unknown, where: string): void => {
     if (typeof raw !== "string") {
       problems.push(`${where} must be a string`);
@@ -268,14 +269,8 @@ export function extensionDeclaredFiles(manifest: unknown): { files: string[]; pr
     }
     try {
       const path = normalizeRelativePath(raw);
-      if (path === "extension.json") problems.push(`${where} must not name the manifest itself`);
-      const key = caseFoldKey(path);
-      const earlier = files.get(key);
-      // Two spellings of one name are one file on Windows and macOS but two on Linux.
-      if (earlier !== undefined && earlier !== path) {
-        problems.push(`${where}: ${JSON.stringify(path)} differs from ${JSON.stringify(earlier)} only in case`);
-      }
-      files.set(key, path);
+      if (caseFoldKey(path) === "extension.json") problems.push(`${where} must not name the manifest itself`);
+      files.add(path);
     } catch (error) {
       problems.push(`${where}: ${(error as Error).message}`);
     }
@@ -286,7 +281,12 @@ export function extensionDeclaredFiles(manifest: unknown): { files: string[]; pr
   view.rules.forEach((rule, index) => {
     if (rule.kind === "json_schema") add(rule.parameters.schema_path, `/rules/${index}/parameters/schema_path`);
   });
-  return { files: [...files.values()].sort(compareCodePoints), problems };
+  // Names that differ only in case at any folder level are one file on Windows and macOS but two on
+  // Linux, so the inventory would depend on the platform.
+  for (const group of findCaseFoldCollisions([...files, "extension.json"])) {
+    problems.push(`${group.map((name) => JSON.stringify(name)).join(" and ")} differ only in case`);
+  }
+  return { files: [...files].sort(compareCodePoints), problems };
 }
 
 /** True when an extension resource is a parsed template descriptor rather than a Markdown starter. */
@@ -358,6 +358,8 @@ interface Registries {
   /** Every selectable template, including extension Markdown templates that have no descriptor. */
   templateTypes: Map<string, { id: string; artifactType: string; path: string }>;
   resourceIds: Map<string, string>;
+  /** The release's own template for each artifact type, whose required sections selections must keep. */
+  coreTemplateByType: Map<string, TemplateView>;
 }
 
 const knownType = (registries: Registries, type: string): boolean =>
@@ -563,8 +565,8 @@ function compareExtensionLock(
   const loaded = new Set<string>();
   for (const extension of extensions) {
     const value = extension.manifest.value;
-    // A malformed manifest is reported by the schema check; skip it here.
-    if (value === null || typeof value !== "object") continue;
+    // A manifest that fails its schema is reported by the schema check; don't compare it here.
+    if (!validateAgainstSchema("extension", value).valid) continue;
     const view = value as Partial<ExtensionView>;
     if (typeof view.id !== "string") continue;
     loaded.add(caseFoldKey(view.id));
@@ -721,6 +723,8 @@ function registerCore(release: ReleaseInput, manifest: ReleaseManifest, registri
         artifactType: view.artifact_type,
         path: document.origin,
       });
+      if (!registries.coreTemplateByType.has(view.artifact_type))
+        registries.coreTemplateByType.set(view.artifact_type, view);
     }
   }
 }
@@ -824,6 +828,7 @@ function buildRegistries(
     templates: new Map(),
     templateTypes: new Map(),
     resourceIds: new Map(),
+    coreTemplateByType: new Map(),
   };
   registerCore(input.release, manifest, registries, out);
   for (const entry of ordered.values()) registerExtension(entry, registries, out);
@@ -949,8 +954,36 @@ function checkSelections(application: ApplicationView, appPath: string, registri
         where,
         "Select a template for the same artifact type.",
       );
+    } else {
+      checkRequiredSections(templateId, type, where, registries, out);
     }
   }
+}
+
+/**
+ * A selected template descriptor keeps every section the core template requires (design doc 06).
+ * Markdown templates without a descriptor are checked by the rule engine (B07), which parses headings.
+ */
+function checkRequiredSections(
+  templateId: string,
+  type: string,
+  where: string,
+  registries: Registries,
+  out: Findings,
+): void {
+  const selected = registries.templates.get(caseFoldKey(templateId))?.view;
+  const core = registries.coreTemplateByType.get(type);
+  if (!selected || !core || selected.id === core.id) return;
+  const present = new Set(selected.sections.filter((section) => section.required).map((section) => section.heading));
+  const missing = core.sections.filter((section) => section.required && !present.has(section.heading));
+  if (missing.length === 0) return;
+  out.error(
+    "CONFIG_TEMPLATE_MISSING_SECTIONS",
+    `template ${templateId} drops sections the core ${type} template requires`,
+    where,
+    "Keep every core-required section, marked required, in the extension's template.",
+    missing.map((section) => section.heading),
+  );
 }
 
 type WorkflowStep = WorkflowView["steps"][number];
@@ -1010,16 +1043,27 @@ function checkStep(step: WorkflowStep, where: (field: string) => string, context
 
 /** True when `after` edges form a cycle. */
 function hasStepCycle(steps: ReadonlyMap<string, WorkflowStep>): boolean {
-  const state = new Map<string, "visiting" | "done">();
-  const visit = (id: string): boolean => {
-    if (state.get(id) === "done") return false;
-    if (state.get(id) === "visiting") return true;
-    state.set(id, "visiting");
-    const cyclic = (steps.get(id)?.after ?? []).some((next) => steps.has(next) && visit(next));
-    state.set(id, "done");
-    return cyclic;
-  };
-  return [...steps.keys()].some((id) => visit(id));
+  // Kahn's algorithm: repeatedly remove steps with no remaining predecessors. Iterative, so a long
+  // chain of steps can't overflow the stack.
+  const remaining = new Map<string, number>();
+  const followers = new Map<string, string[]>();
+  for (const [id, step] of steps) {
+    const known = [...new Set(step.after)].filter((predecessor) => steps.has(predecessor));
+    remaining.set(id, known.length);
+    for (const predecessor of known) followers.set(predecessor, [...(followers.get(predecessor) ?? []), id]);
+  }
+  const ready = [...remaining].filter(([, count]) => count === 0).map(([id]) => id);
+  let removed = 0;
+  while (ready.length > 0) {
+    const id = ready.pop() as string;
+    removed++;
+    for (const follower of followers.get(id) ?? []) {
+      const count = (remaining.get(follower) as number) - 1;
+      remaining.set(follower, count);
+      if (count === 0) ready.push(follower);
+    }
+  }
+  return removed < steps.size;
 }
 
 /** Step 6: workflow graphs (design doc 16): unique steps, known references, acyclic. */

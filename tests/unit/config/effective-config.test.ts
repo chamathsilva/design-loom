@@ -429,6 +429,24 @@ describe("effective configuration: workflow graphs", () => {
       "reviewer role security",
     ],
   ];
+  test("a long chain of steps is checked without overflowing the stack", () => {
+    const step = (id: string, after: string[]) => ({
+      id,
+      skill: "dl-design-change",
+      after,
+      capabilities: [],
+      required_outputs: ["contract"],
+      blocking_rules: [],
+      reviewer_roles: [],
+      required_for_handoff: false,
+    });
+    const chain = Array.from({ length: 5000 }, (_, i) => step(`s${i}`, i === 0 ? [] : [`s${i - 1}`]));
+    assert.ok(resolveEffectiveConfig(withWorkflow((steps) => steps.splice(0, steps.length, ...chain))).envelope);
+    const loop = chain.map((entry, i) => (i === 0 ? { ...entry, after: ["s4999"] } : entry));
+    const result = resolveEffectiveConfig(withWorkflow((steps) => steps.splice(0, steps.length, ...loop)));
+    assert.ok(result.diagnostics.some((entry) => entry.message.includes("has a cycle")));
+  });
+
   for (const [name, edit, message] of cases) {
     test(`rejects ${name}`, () => {
       const result = resolveEffectiveConfig(withWorkflow(edit));
@@ -546,6 +564,48 @@ describe("effective configuration: extensions", () => {
     assert.ok(codes(result.diagnostics).includes("CONFIG_SCHEMA_INVALID"));
   });
 
+  test("a locked manifest with a malformed version is a schema diagnostic, not a crash", () => {
+    const { extension, tuple } = exampleExtension();
+    const value = { ...(extension.manifest.value as object), version: { toString: null } };
+    const broken = { ...extension, manifest: { ...extension.manifest, value } };
+    const result = resolveEffectiveConfig(input({ lock: matchingLock([tuple]), extensions: [broken] }));
+    assert.equal(result.envelope, null);
+    assert.ok(codes(result.diagnostics).includes("CONFIG_SCHEMA_INVALID"));
+  });
+
+  test("a selected template descriptor must keep the core template's required sections", () => {
+    const core = RELEASE.templates.find(
+      (document) => (document.value as { artifact_type: string }).artifact_type === "engineering-design",
+    );
+    assert.ok(core);
+    const select = (sections: unknown[]) => {
+      const descriptor = {
+        ...core,
+        origin: "extensions/example.database-review/templates/db.template.json",
+        value: { ...(core.value as object), id: "example.db", sections },
+      };
+      const { extension, tuple } = exampleExtension((m) => {
+        m.resources = [{ id: "example.db", kind: "template", path: "templates/db.template.json" }];
+        m.rules = [];
+      });
+      const withDescriptor = { ...extension, descriptors: new Map([["example.db", descriptor]]) };
+      const app = withValue(application(), (value) => {
+        value.extension_paths = [extension.path];
+        value.template_selections = { "engineering-design": "example.db" };
+      });
+      return resolveEffectiveConfig(
+        input({ application: app, lock: matchingLock([tuple]), extensions: [withDescriptor] }),
+      );
+    };
+    const coreSections = (core.value as { sections: { heading: string }[] }).sections;
+    const extra = { key: "migration", heading: "Migration", required: true, guidance: "Describe schema changes." };
+    assert.ok(select([...coreSections, extra]).envelope);
+    const dropped = select([extra]);
+    assert.equal(dropped.envelope, null);
+    const missing = dropped.diagnostics.find((entry) => entry.code === "CONFIG_TEMPLATE_MISSING_SECTIONS");
+    assert.ok(missing?.evidence.includes("Context used"));
+  });
+
   test("supplied extensions must be exactly the profile's extension_paths", () => {
     const { extension, tuple } = exampleExtension();
     const listedNotLoaded = withValue(application(), (value) => {
@@ -646,6 +706,24 @@ describe("loader helpers", () => {
       parameters: { payload_pointer: "/payload", schema_path: "schemas\\payload.json" },
     });
     assert.deepEqual(extensionDeclaredFiles(manifest).files, ["schemas/payload.json", "templates/database-design.md"]);
+  });
+
+  test("a case variant of extension.json is the manifest itself", () => {
+    const manifest = JSON.parse(readFileSync(join(EXAMPLES, "extension", "extension.json"), "utf8"));
+    manifest.resources.push({ id: "example.manifest", kind: "instructions", path: "Extension.json" });
+    const { problems } = extensionDeclaredFiles(manifest);
+    assert.ok(
+      problems.some((problem) => problem.includes("must not name the manifest itself")),
+      problems.join("\n"),
+    );
+  });
+
+  test("a file and a folder whose names differ only in case are a problem", () => {
+    const manifest = JSON.parse(readFileSync(join(EXAMPLES, "extension", "extension.json"), "utf8"));
+    manifest.resources.push({ id: "example.notes", kind: "instructions", path: "Templates" });
+    const { problems } = extensionDeclaredFiles(manifest);
+    assert.equal(problems.length, 1);
+    assert.match(problems[0] ?? "", /"Templates" and "templates" differ only in case/);
   });
 
   test("two declared files that differ only in case are a problem", () => {
