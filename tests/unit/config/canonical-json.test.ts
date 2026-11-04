@@ -188,6 +188,16 @@ describe("strict parsing", () => {
     assert.ok(elapsed < 2000, `took ${Math.round(elapsed)} ms`);
   });
 
+  test("rejects one huge number literal in linear time", () => {
+    // Interior zeros made a /0+$/ trailing-zero scan quadratic: seconds for a 100 KB literal.
+    const literal = `1${"0".repeat(200_000)}1`;
+    const started = performance.now();
+    assert.throws(() => parseJson(literal), CanonicalJsonError);
+    assert.throws(() => parseJson(`[${literal}.5]`), CanonicalJsonError);
+    const elapsed = performance.now() - started;
+    assert.ok(elapsed < 2000, `took ${Math.round(elapsed)} ms`);
+  });
+
   test("combines escaped surrogate pairs into one code point", () => {
     assert.equal(parseJson('"\\ud83d\\ude00"'), "\u{1f600}");
   });

@@ -141,8 +141,11 @@ export function parseJson(text: string): JsonValue {
     const digits = (whole + fraction).replace(/^0+/, "");
     if (digits === "") return 0;
     const exponent = Number(exponentText);
-    const significant = digits.replace(/0+$/, "");
-    const trailingZeros = digits.length - significant.length;
+    // Scan back for trailing zeros; a /0+$/ regex retries at every interior zero, which is quadratic.
+    let end = digits.length;
+    while (digits.charCodeAt(end - 1) === 48) end--;
+    const significant = digits.slice(0, end);
+    const trailingZeros = digits.length - end;
     // Power of ten applied to `significant`, which has no trailing zeros.
     const scale = exponent - fraction.length + trailingZeros;
     if (!Number.isSafeInteger(scale) || scale < 0) return fail(`number is not an integer: ${literal}`);
