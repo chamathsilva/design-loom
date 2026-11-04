@@ -107,8 +107,9 @@ export function artifactSemanticProjection(artifact: ArtifactSemanticInput): Art
     covered_change_ids: sortedUnique(artifact.covered_change_ids ?? [], "covered_change_ids", artifact.id),
     applicability: artifact.applicability,
     applicability_reason: artifact.applicability_reason ?? "",
-    payload: artifact.payload ?? {},
-    extensions: artifact.extensions ?? {},
+    // Copies, so changing the projection never changes the caller's artifact.
+    payload: structuredClone(artifact.payload ?? {}),
+    extensions: structuredClone(artifact.extensions ?? {}),
   };
 }
 

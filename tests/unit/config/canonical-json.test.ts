@@ -188,6 +188,10 @@ describe("strict parsing", () => {
     assert.ok(elapsed < 2000, `took ${Math.round(elapsed)} ms`);
   });
 
+  test("reports an overflowing exponent as out of range", () => {
+    assert.throws(() => parseJson("1e99999999999999999999"), /outside the safe integer range/);
+  });
+
   test("rejects one huge number literal in linear time", () => {
     // Interior zeros made a /0+$/ trailing-zero scan quadratic: seconds for a 100 KB literal.
     const literal = `1${"0".repeat(200_000)}1`;

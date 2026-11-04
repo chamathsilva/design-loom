@@ -148,7 +148,8 @@ export function parseJson(text: string): JsonValue {
     const trailingZeros = digits.length - end;
     // Power of ten applied to `significant`, which has no trailing zeros.
     const scale = exponent - fraction.length + trailingZeros;
-    if (!Number.isSafeInteger(scale) || scale < 0) return fail(`number is not an integer: ${literal}`);
+    if (!Number.isSafeInteger(scale)) return fail(`number outside the safe integer range: ${literal}`);
+    if (scale < 0) return fail(`number is not an integer: ${literal}`);
     if (significant.length + scale > 16) return fail(`number outside the safe integer range: ${literal}`);
 
     const magnitude = BigInt(significant) * 10n ** BigInt(scale);

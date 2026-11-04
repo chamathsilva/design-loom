@@ -165,6 +165,14 @@ describe("invalid input", () => {
     assert.throws(() => artifactSemanticDigest(a), ArtifactSemanticError);
   });
 
+  test("the projection doesn't share objects with the input", () => {
+    const a = byId("project-artifact") as { payload?: Record<string, unknown> };
+    a.payload = { nested: { value: 1 } };
+    const projection = artifactSemanticProjection(a as never) as unknown as { payload: { nested: { value: number } } };
+    projection.payload.nested.value = 2;
+    assert.deepEqual(a.payload, { nested: { value: 1 } });
+  });
+
   test("rejects a scope other than change or project", () => {
     const a = byId("project-artifact") as unknown as { scope: string };
     a.scope = "global";
