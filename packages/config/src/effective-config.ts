@@ -586,9 +586,22 @@ function compareLock(input: ResolveInput, frameworkVersion: string, out: Finding
     out,
   );
   const extensions = compareExtensionLock(pinned, input.lock.origin, input.extensions, out);
+  // The application profile pins a framework version too; it must agree with the lock.
+  const appVersion = (input.application.value as { framework_version?: unknown } | null)?.framework_version;
+  let frameworkState = framework;
+  if (typeof appVersion === "string" && appVersion !== pinned.framework_version) {
+    frameworkState = "mismatch";
+    out.lockError(
+      "CONFIG_APP_FRAMEWORK_MISMATCH",
+      `the application profile pins framework ${appVersion} but the lock pins ${pinned.framework_version}`,
+      pointerPath(input.application.origin, "/framework_version"),
+      "Update the profile and the lock together in one reviewed change.",
+      [`profile: ${appVersion}`, `lock: ${pinned.framework_version}`],
+    );
+  }
   return {
-    ok: [framework, engine, resources, extensions].every((state) => state === "match"),
-    framework_version: framework,
+    ok: [frameworkState, engine, resources, extensions].every((state) => state === "match"),
+    framework_version: frameworkState,
     engine,
     resources,
     extensions,
@@ -634,7 +647,8 @@ function orderExtensions(
     }
   }
   for (const entry of entries) {
-    for (const required of entry.view.requires.filter((id) => !byId.has(caseFoldKey(id)))) {
+    // Dependencies name exact IDs (design doc 06); a case variant is a missing dependency.
+    for (const required of entry.view.requires.filter((id) => byId.get(caseFoldKey(id))?.view.id !== id)) {
       out.error(
         "CONFIG_EXTENSION_DEPENDENCY_MISSING",
         `extension ${entry.view.id} requires ${required}, which is not loaded`,

@@ -252,6 +252,18 @@ describe("effective configuration: lock comparison", () => {
   });
 });
 
+describe("effective configuration: application and lock versions", () => {
+  test("the profile's framework version must agree with the lock", () => {
+    const app = withValue(application(), (value) => {
+      value.framework_version = "0.2.0";
+    });
+    const result = resolveEffectiveConfig(input({ application: app }));
+    assert.equal(result.lock?.framework_version, "mismatch");
+    assert.equal(result.lock?.ok, false);
+    assert.deepEqual(codes(result.diagnostics), ["CONFIG_APP_FRAMEWORK_MISMATCH"]);
+  });
+});
+
 describe("effective configuration: invalid input", () => {
   test("a schema violation stops resolution and points at the field", () => {
     const app = withValue(application(), (value) => {
@@ -516,6 +528,18 @@ describe("effective configuration: extensions", () => {
     );
     assert.equal(result.envelope, null);
     assert.ok(codes(result.diagnostics).includes("CONFIG_DUPLICATE_ID"));
+  });
+
+  test("a dependency must name the exact ID, not a case variant", () => {
+    const a = exampleExtension((m) => Object.assign(m, { id: "example.a", resources: [], rules: [] }));
+    const b = exampleExtension((m) =>
+      Object.assign(m, { id: "example.b", requires: ["Example.A"], resources: [], rules: [] }),
+    );
+    const result = resolveEffectiveConfig(
+      input({ lock: matchingLock([a.tuple, b.tuple]), extensions: [a.extension, b.extension] }),
+    );
+    assert.equal(result.envelope, null);
+    assert.deepEqual(codes(result.diagnostics), ["CONFIG_EXTENSION_DEPENDENCY_MISSING"]);
   });
 
   test("extensions that require each other are rejected as a cycle", () => {
