@@ -18,6 +18,7 @@ describe("normalizeRelativePath accepts", () => {
     ["shared/content/é-status.md", "shared/content/é-status.md"],
     ["a..b/..c", "a..b/..c"],
     ["console.md", "console.md"],
+    ["x".repeat(255), "x".repeat(255)],
   ];
   for (const [input, expected] of cases) {
     test(JSON.stringify(input), () => {
@@ -51,6 +52,10 @@ describe("normalizeRelativePath rejects", () => {
     ["reserved device name", "con"],
     ["reserved device name with extension", "docs/NUL.txt"],
     ["reserved COM port", "com1.json"],
+    ["reserved console input", "conin$"],
+    ["reserved console output with extension", "docs/CONOUT$.txt"],
+    ["segment longer than 255 bytes", "x".repeat(256)],
+    ["multi-byte segment longer than 255 bytes", "é".repeat(128)],
     ["unpaired surrogate", "a\ud800b"],
     ["trailing slash when not allowed", "src/"],
   ];

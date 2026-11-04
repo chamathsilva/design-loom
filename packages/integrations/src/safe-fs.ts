@@ -26,6 +26,7 @@ export type SafeFsErrorCode =
   | "exists"
   | "not-found"
   | "digest-mismatch"
+  | "invalid-digest"
   | "not-a-file";
 
 export class SafeFsError extends Error {
@@ -98,6 +99,9 @@ export class SafeFileSystem {
 
   /** Writes bytes atomically. See WriteOptions for the overwrite rules. */
   async writeAtomic(relativePath: string, bytes: Uint8Array, options: WriteOptions = {}): Promise<void> {
+    if (options.expectedSha256 !== undefined && !/^[0-9a-f]{64}$/.test(options.expectedSha256)) {
+      throw new SafeFsError("invalid-digest", "expectedSha256 must be 64 lower-case hex characters");
+    }
     const normalized = normalizeRelativePath(relativePath);
     const target = this.resolve(normalized);
     const parent = await this.ensureDirectory(dirname(target), normalized);
@@ -123,7 +127,8 @@ export class SafeFileSystem {
       }
     }
 
-    const temp = join(parent, `.${basename(target)}.${randomBytes(6).toString("hex")}.tmp`);
+    // Fixed-length name, so a target near the 255-byte name limit still gets a valid temp file.
+    const temp = join(parent, `.dl-${randomBytes(12).toString("hex")}.tmp`);
     try {
       const handle = await open(temp, "wx");
       try {

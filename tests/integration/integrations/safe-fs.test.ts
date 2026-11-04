@@ -84,6 +84,21 @@ describe("writeAtomic", () => {
     assert.equal(text(await fs.readBytes("c.txt")), "one");
   });
 
+  test("rejects a malformed expected digest before touching the disk", async () => {
+    await fs.writeAtomic("d.txt", bytes("one"));
+    await expectCode(
+      fs.writeAtomic("d.txt", bytes("two"), { expectedSha256: sha256Hex(bytes("one")).toUpperCase() }),
+      "invalid-digest",
+    );
+    assert.equal(text(await fs.readBytes("d.txt")), "one");
+  });
+
+  test("writes a file whose name is at the 255-byte limit", async () => {
+    const name = "n".repeat(255);
+    await fs.writeAtomic(name, bytes("long"));
+    assert.equal(text(await fs.readBytes(name)), "long");
+  });
+
   test("refuses a replacement of a missing file", async () => {
     await expectCode(fs.writeAtomic("missing.txt", bytes("x"), { expectedSha256: sha256Hex(bytes("x")) }), "not-found");
   });

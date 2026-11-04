@@ -20,6 +20,7 @@ export {
   caseFoldKey,
   findCaseFoldCollisions,
   isSafeRelativePath,
+  MAX_SEGMENT_BYTES,
   type NormalizeOptions,
   normalizeRelativePath,
   PathPolicyError,

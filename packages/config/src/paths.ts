@@ -11,7 +11,10 @@ export class PathPolicyError extends Error {
 }
 
 /** Device names Windows reserves in any directory, with or without an extension. */
-const WINDOWS_RESERVED = /^(?:con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(?:\..*)?$/i;
+const WINDOWS_RESERVED = /^(?:con|prn|aux|nul|conin\$|conout\$|com[0-9¹²³]|lpt[0-9¹²³])(?:\..*)?$/i;
+
+/** Longest file or folder name most file systems accept, in UTF-8 bytes. */
+export const MAX_SEGMENT_BYTES = 255;
 
 /** Characters that are invalid in Windows file names; ":" also blocks drive letters and NTFS streams. */
 const WINDOWS_INVALID_CHARS = /[<>:"|?*]/;
@@ -53,6 +56,9 @@ export function normalizeRelativePath(input: string, options: NormalizeOptions =
     if (WINDOWS_INVALID_CHARS.test(segment)) fail(`segment "${segment}" contains a character invalid on Windows`);
     if (/[. ]$/.test(segment)) fail(`segment "${segment}" ends with a dot or space, which Windows drops`);
     if (WINDOWS_RESERVED.test(segment)) fail(`segment "${segment}" is a reserved Windows device name`);
+    if (new TextEncoder().encode(segment).length > MAX_SEGMENT_BYTES) {
+      fail(`segment is longer than ${MAX_SEGMENT_BYTES} bytes`);
+    }
   }
 
   return isDirectory ? `${segments.join("/")}/` : segments.join("/");
