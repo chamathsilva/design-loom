@@ -119,6 +119,19 @@ describe("sourceViolations rejects", () => {
     ["Windows path flavour", 'import { win32 } from "node:path/win32";', ctx("config")],
     ["timers module", 'import { setTimeout } from "node:timers/promises";', ctx("workflow")],
     ["async_hooks module", 'import { AsyncLocalStorage } from "node:async_hooks";', ctx("workflow")],
+    [
+      "code after postfix ++ and a division",
+      "let n = 0;\nconst r = n++ / 2; const t = Date.now(); const q = r / 2;",
+      ctx("workflow"),
+    ],
+    ["import.meta.url", "const here = import.meta.url;", ctx("config")],
+    ["import.meta.dirname", "const dir = import.meta.dirname;", ctx("config")],
+    ["setTimeout", "setTimeout(done, 10);", ctx("workflow")],
+    ["setInterval", "const t = setInterval(tick, 10);", ctx("workflow")],
+    ["XMLHttpRequest", "const xhr = new XMLHttpRequest();", ctx("artifacts")],
+    ["Worker", 'const w = new Worker("./w.js");', ctx("workflow")],
+    ["Atomics", "Atomics.wait(view, 0, 0);", ctx("workflow")],
+    ["indirect eval", '(0, eval)("1 + 1");', ctx("workflow")],
     ["undeclared third-party package", 'import x from "left-pad";', ctx("workflow")],
     ["undeclared scoped third-party package", 'import x from "@acme/tool/sub";', ctx("workflow")],
   ];
@@ -158,6 +171,7 @@ describe("sourceViolations accepts", () => {
     ["a later object key named process", "const step = { id, process: false };", ctx("workflow")],
     ["POSIX path module", 'import { posix } from "node:path/posix";', ctx("config")],
     ["division, not a regex", "const r = total / count / 2;", ctx("workflow")],
+    ["division after postfix ++", "let n = 0;\nconst r = n++ / 2 / 3;", ctx("workflow")],
     ["JSON data beside src", 'import s from "../schemas/a.schema.json" with { type: "json" };', ctx("validation")],
   ];
   for (const [name, source, context] of cases) {
@@ -169,6 +183,7 @@ describe("sourceViolations accepts", () => {
 
 describe("known gaps (documented in boundary-rules.ts, covered by code review)", () => {
   test("a global property name built at run time is not detected", () => {
+    // Also not detected: a regex literal right after `)`, read as division by the lexer.
     assert.deepEqual(sourceViolations('self["fe" + "tch"](url);', ctx("artifacts")), []);
   });
 });

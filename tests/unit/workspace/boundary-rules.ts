@@ -69,12 +69,14 @@ function bareReference(names: string): RegExp {
 const IO_GLOBAL_PATTERNS: ReadonlyArray<[RegExp, string]> = [
   // Any bare reference, so aliases such as `const f = fetch` count too. Members (store.fetch) and
   // object keys (`{ fetch: true }`) don't.
-  [bareReference("fetch|WebSocket|EventSource"), "uses a network global"],
+  [bareReference("fetch|WebSocket|EventSource|XMLHttpRequest"), "uses a network global"],
+  [bareReference("Worker|SharedWorker|Atomics"), "uses threads or shared memory"],
   [/(?<![.\w$])globalThis\b/, "reaches the global object"],
   [/\b(?:self|window|global)\s*\.\s*(?:fetch|WebSocket|EventSource|process)\b/, "uses a global through its receiver"],
   [/\bgetBuiltinModule\b/, "loads a built-in through process.getBuiltinModule"],
   [/\bcreateRequire\b/, "creates a require function"],
-  [/(?<![.\w$])(?:eval|Function)\s*\(|\bnew\s+Function\b/, "evaluates code from a string"],
+  // Any reference to eval, so the indirect `(0, eval)(code)` form counts too.
+  [/(?<![.\w$])eval\b|(?<![.\w$])Function\s*\(|\bnew\s+Function\b/, "evaluates code from a string"],
 ];
 
 /**
@@ -85,6 +87,8 @@ const NONDETERMINISTIC_PATTERNS: ReadonlyArray<[RegExp, string]> = [
   [bareReference("process"), "reads the process object"],
   [/\bDate\s*\.\s*now\b|\bnew\s+Date\s*\(\s*\)|(?<!\bnew\s+)(?<![.\w$])Date\s*\(/, "reads the current time"],
   [/\bperformance\s*\.\s*now\b/, "reads a timer"],
+  [bareReference("setTimeout|setInterval|setImmediate"), "schedules a timer"],
+  [/\bimport\s*\.\s*meta\s*\.\s*(?:url|dirname|filename|resolve)\b/, "reads a host path through import.meta"],
   [
     /\bMath\s*\.\s*random\b|\b(?:random(?:Bytes|UUID|Int|Fill|FillSync)|getRandomValues|generateKey(?:Pair)?(?:Sync)?|generatePrime(?:Sync)?)\b/,
     "uses randomness",
@@ -229,6 +233,12 @@ export function maskSource(source: string): { code: string; bare: string } {
       lastWord = source.slice(i, j);
       last = "a";
       i = j;
+      continue;
+    } else if ((ch === "+" || ch === "-") && next === ch) {
+      // `a++ / 2`: after ++ or -- a slash divides, so treat the pair like the end of an operand.
+      last = "a";
+      lastWord = "";
+      i += 2;
       continue;
     } else {
       if (ch === "{") depth++;
