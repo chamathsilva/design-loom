@@ -810,16 +810,16 @@ function reportDepth(artifacts: ReadonlyMap<string, IndexedArtifact>, limit: num
       depth.set(frame.id, deepest + 1);
     }
   }
+  // Report only where a chain first goes over the limit, not every artifact above it.
   for (const [id, value] of [...depth].sort(([a], [b]) => compareCodePoints(a, b))) {
-    if (value > limit) {
-      const artifact = artifacts.get(id);
-      report(
-        "STORE_DEPENDENCY_TOO_DEEP",
-        "error",
-        `artifact ${id} has a dependency chain ${value} deep; the limit is ${limit}`,
-        artifact ? pointerPath(artifact.path, "/depends_on") : "",
-        "Flatten the chain: depend on the artifacts actually used.",
-      );
-    }
+    if (value !== limit + 1) continue;
+    const artifact = artifacts.get(id);
+    report(
+      "STORE_DEPENDENCY_TOO_DEEP",
+      "error",
+      `artifact ${id} has a dependency chain ${value} deep; the limit is ${limit}, so everything that depends on it is too deep as well`,
+      artifact ? pointerPath(artifact.path, "/depends_on") : "",
+      "Flatten the chain: depend on the artifacts actually used.",
+    );
   }
 }

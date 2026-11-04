@@ -173,6 +173,13 @@ describe("graph queries", () => {
     assert.deepEqual(paths, [...paths].sort());
   });
 
+  test("a closure lists artifacts whose bytes didn't verify", () => {
+    assert.deepEqual(referenceClosure(result, ["QA-BATCH-001"]).unverified, []);
+    const repo = sampleRepository();
+    repo.set("changes/CHANGE-001/content/requirements.md", new TextEncoder().encode("edited\n"));
+    assert.deepEqual(referenceClosure(index(repo), ["QA-BATCH-001"]).unverified, ["REQDOC-001"]);
+  });
+
   test("a closure reports IDs the index doesn't have", () => {
     assert.deepEqual(referenceClosure(result, ["NOPE-001"]).missing, ["NOPE-001"]);
   });
@@ -449,12 +456,11 @@ describe("store index: problems", () => {
     assert.ok(codes(tooLarge).includes("STORE_RECORD_TOO_LARGE"));
     const deep = index(repo, { maxDependencyDepth: 2 });
     const flagged = deep.diagnostics.filter((entry) => entry.code === "STORE_DEPENDENCY_TOO_DEEP");
-    assert.deepEqual(flagged.map((entry) => entry.message.split(" ")[1]).sort(), [
-      "DESIGN-001",
-      "QA-001",
-      "QA-BATCH-001",
-      "REVIEW-001",
-    ]);
+    // Only where a chain first goes over the limit: QA-001, QA-BATCH-001 and REVIEW-001 sit above it.
+    assert.deepEqual(
+      flagged.map((entry) => entry.message.split(" ")[1]),
+      ["DESIGN-001"],
+    );
   });
 
   test("a long dependency chain doesn't overflow the stack", () => {
@@ -470,7 +476,10 @@ describe("store index: problems", () => {
     }
     const result = index(repo);
     const deep = result.diagnostics.filter((entry) => entry.code === "STORE_DEPENDENCY_TOO_DEEP");
-    assert.equal(deep.length, 3000 - 100);
+    assert.deepEqual(
+      deep.map((entry) => entry.message.split(" ")[1]),
+      ["CHAIN-0100"],
+    );
     assert.equal(transitiveDependents(result, ["CHAIN-0000"]).length, 2999);
   });
 });

@@ -10,6 +10,7 @@
 import {
   buildStoreIndex,
   classifyStorePath,
+  DEFAULT_STORE_LIMITS,
   isContentFolder,
   referencedFiles,
   STORE_SCAN_ROOTS,
@@ -41,7 +42,18 @@ const MAX_FOLDER_DEPTH = 8;
 const decoder = new TextDecoder("utf-8", { fatal: true });
 
 /** Lists and reads the store. Missing scan roots are fine: a new repository has none. */
-export async function scanStore(fs: SafeFileSystem): Promise<StoreScan> {
+export interface ScanOptions {
+  /** Record files larger than this are reported by size and not read (default: design doc 03's 1 MB). */
+  maxMetadataBytes?: number;
+  /** Referenced content larger than this is not read or hashed (default: doc 03's 10 MB source limit). */
+  maxReferencedBytes?: number;
+}
+
+export const DEFAULT_MAX_REFERENCED_BYTES = 10_485_760;
+
+export async function scanStore(fs: SafeFileSystem, options: ScanOptions = {}): Promise<StoreScan> {
+  const maxMetadataBytes = options.maxMetadataBytes ?? DEFAULT_STORE_LIMITS.maxMetadataBytes;
+  const maxReferencedBytes = options.maxReferencedBytes ?? DEFAULT_MAX_REFERENCED_BYTES;
   const diagnostics: Diagnostic[] = [];
   const records: StoreFile[] = [];
   const warn = (code: string, message: string, path: string, remediation: string): void => {
@@ -88,7 +100,7 @@ export async function scanStore(fs: SafeFileSystem): Promise<StoreScan> {
           "Store the record itself in the repository.",
         );
       } else if (entry.kind === "file") {
-        records.push(await readRecord(fs, path));
+        records.push(await readRecord(fs, path, maxMetadataBytes));
       } else {
         warn("STORE_UNEXPECTED_FILE", "special file is ignored", path, "Remove it.");
       }
@@ -103,6 +115,22 @@ export async function scanStore(fs: SafeFileSystem): Promise<StoreScan> {
   const referenced = new Map<string, string | null>();
   for (const path of referencedFiles(records)) {
     try {
+      const size = await fs.sizeOf(path);
+      if (size > maxReferencedBytes) {
+        referenced.set(path, null);
+        diagnostics.push(
+          diagnostic(
+            "STORE_REFERENCE_TOO_LARGE",
+            "error",
+            `${path} is ${size} bytes; the limit is ${maxReferencedBytes}`,
+            {
+              path,
+              remediation: "Keep large binaries as externally versioned references, not artifact content.",
+            },
+          ),
+        );
+        continue;
+      }
       referenced.set(path, sha256Hex(await fs.readBytes(path)));
     } catch (error) {
       if (!(error instanceof SafeFsError)) throw error;
@@ -120,9 +148,12 @@ export async function scanStore(fs: SafeFileSystem): Promise<StoreScan> {
   return { records, referenced, diagnostics };
 }
 
-async function readRecord(fs: SafeFileSystem, path: string): Promise<StoreFile> {
+async function readRecord(fs: SafeFileSystem, path: string, maxBytes: number): Promise<StoreFile> {
   let bytes: Uint8Array;
   try {
+    // Oversized files are reported by size alone; the index flags them without reading them.
+    const size = await fs.sizeOf(path);
+    if (size > maxBytes) return { path, sha256: "", size };
     bytes = await fs.readBytes(path);
   } catch (error) {
     if (!(error instanceof SafeFsError)) throw error;
@@ -144,7 +175,9 @@ export async function readStoreIndex(
   fs: SafeFileSystem,
   options: { applicationId: string; limits?: Partial<StoreLimits> },
 ): Promise<StoreIndex> {
-  const scan = await scanStore(fs);
+  const scan = await scanStore(fs, {
+    maxMetadataBytes: options.limits?.maxMetadataBytes ?? DEFAULT_STORE_LIMITS.maxMetadataBytes,
+  });
   const index = buildStoreIndex({
     applicationId: options.applicationId,
     records: scan.records,

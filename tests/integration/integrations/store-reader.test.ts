@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, before, describe, test } from "node:test";
 import { buildStoreIndex } from "@design-loom/artifacts";
-import { readStoreIndex, SafeFileSystem } from "@design-loom/integrations";
+import { readStoreIndex, SafeFileSystem, scanStore } from "@design-loom/integrations";
 import { SAMPLE_APPLICATION_ID, sampleRepository, storeInput } from "../../support/sample-store.ts";
 
 let scratch: string;
@@ -106,6 +106,25 @@ describe("store reader", () => {
     const result = await readStoreIndex(await SafeFileSystem.open(root), { applicationId: SAMPLE_APPLICATION_ID });
     assert.equal(result.artifacts.get("DESIGN-001")?.bytesVerified, false);
     assert.ok(result.diagnostics.some((entry) => entry.severity === "error"));
+  });
+
+  test("oversized records and content are reported by size without being read", async () => {
+    const repo = sampleRepository();
+    repo.set("changes/CHANGE-001/artifacts/BIG-001.json", new Uint8Array(2 * 1024 * 1024).fill(32));
+    const root = await writeRepository("oversized", repo);
+    const fs = await SafeFileSystem.open(root);
+    const result = await readStoreIndex(fs, { applicationId: SAMPLE_APPLICATION_ID });
+    assert.ok(
+      result.diagnostics.some(
+        (entry) => entry.code === "STORE_RECORD_TOO_LARGE" && entry.path.endsWith("BIG-001.json"),
+      ),
+    );
+    const big = (await scanStore(fs)).records.find((file) => file.path.endsWith("BIG-001.json"));
+    assert.deepEqual(big, { path: "changes/CHANGE-001/artifacts/BIG-001.json", sha256: "", size: 2 * 1024 * 1024 });
+
+    const small = await scanStore(fs, { maxReferencedBytes: 10 });
+    assert.ok(small.diagnostics.some((entry) => entry.code === "STORE_REFERENCE_TOO_LARGE"));
+    assert.equal(small.referenced.get("changes/CHANGE-001/content/engineering.md"), null);
   });
 
   test("listDirectory sorts entries and refuses paths outside the root", async () => {
