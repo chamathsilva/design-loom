@@ -30,9 +30,11 @@ export interface ReferenceClosure {
   /**
    * Artifacts in the closure whose content or attachments didn't match their recorded hashes, in
    * ID order. Their entries in `files` are the recorded hashes, not what is on disk, so a baseline
-   * or handoff must refuse a closure with any.
+   * or handoff must refuse a closure with any, or with any `unverifiedSources`.
    */
   unverified: string[];
+  /** Sources in the closure whose snapshot is missing or doesn't match its recorded hash, in ID order. */
+  unverifiedSources: string[];
 }
 
 /** The reference closure of the given artifacts. */
@@ -42,6 +44,7 @@ export function referenceClosure(index: StoreIndex, artifactIds: Iterable<string
   const missing = new Set<string>();
   const files = new Map<string, string>();
   const unverified = new Set<string>();
+  const unverifiedSources = new Set<string>();
   const queue = [...artifactIds];
   while (queue.length > 0) {
     const id = queue.pop() as string;
@@ -65,6 +68,7 @@ export function referenceClosure(index: StoreIndex, artifactIds: Iterable<string
       missing.add(id);
       continue;
     }
+    if (source.snapshotVerified === false) unverifiedSources.add(id);
     files.set(source.path, source.sha256);
     const { snapshot_path: snapshot, sha256 } = source.record;
     if (snapshot !== undefined && sha256 !== undefined) files.set(snapshot, sha256);
@@ -75,6 +79,7 @@ export function referenceClosure(index: StoreIndex, artifactIds: Iterable<string
     files: [...files].map(([path, sha256]) => ({ path, sha256 })).sort((a, b) => compareCodePoints(a.path, b.path)),
     missing: [...missing].sort(compareCodePoints),
     unverified: [...unverified].sort(compareCodePoints),
+    unverifiedSources: [...unverifiedSources].sort(compareCodePoints),
   };
 }
 

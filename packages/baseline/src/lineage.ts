@@ -112,6 +112,24 @@ export function analyzeLineage(baselines: readonly LineageBaseline[]): LineageRe
     );
   };
 
+  // Baseline IDs are unique in the design repository; a repeat would make every reference ambiguous.
+  const seen = new Map<string, LineageBaseline>();
+  for (const baseline of baselines) {
+    const earlier = seen.get(baseline.id);
+    seen.set(baseline.id, baseline);
+    if (!earlier) continue;
+    for (const holder of [earlier, baseline]) {
+      add(
+        holder.change_id,
+        diagnostic("LINEAGE_DUPLICATE_ID", "error", `baseline ID ${baseline.id} is used twice`, {
+          path: holder.path,
+          evidence: [earlier.path, baseline.path],
+          remediation: "Give each baseline a unique ID; baseline files are never renamed after review.",
+        }),
+      );
+    }
+  }
+
   for (const baseline of baselines) {
     for (const [index, predecessorId] of (baseline.supersedes ?? []).entries()) {
       const predecessor = byId.get(predecessorId);

@@ -39,13 +39,17 @@ export interface StoreScan {
 /** Folders nested deeper than this under a scan root are not listed. */
 const MAX_FOLDER_DEPTH = 8;
 
-const decoder = new TextDecoder("utf-8", { fatal: true });
+// ignoreBOM keeps a byte-order mark in the text, so the strict JSON parser rejects it.
+const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
-/** A file-system failure to report, such as a SafeFsError, or EACCES or EIO from the OS. */
-function fsProblem(error: unknown): string | null {
+/**
+ * A file-system failure to report: a SafeFsError, or an OS error such as EACCES or EIO. OS messages
+ * name absolute local paths, so only the error code and the repository-relative path are kept.
+ */
+function fsProblem(error: unknown, path: string): string | null {
   if (error instanceof SafeFsError) return error.message;
   const code = (error as NodeJS.ErrnoException | undefined)?.code;
-  return typeof code === "string" && /^E[A-Z]+$/.test(code) ? `${code}: ${(error as Error).message}` : null;
+  return typeof code === "string" && /^E[A-Z]+$/.test(code) ? `${path || "."} can't be read (${code})` : null;
 }
 
 /** Lists and reads the store. Missing scan roots are fine: a new repository has none. */
@@ -73,7 +77,7 @@ export async function scanStore(fs: SafeFileSystem, options: ScanOptions = {}): 
       entries = await fs.listDirectory(folder);
     } catch (error) {
       if (error instanceof SafeFsError && error.code === "not-found") return;
-      const problem = fsProblem(error);
+      const problem = fsProblem(error, folder);
       if (problem === null) throw error;
       diagnostics.push(
         diagnostic("STORE_FOLDER_UNREADABLE", "error", problem, {
@@ -123,7 +127,15 @@ export async function scanStore(fs: SafeFileSystem, options: ScanOptions = {}): 
         entries = await fs.listDirectory(parent);
       } catch (error) {
         if (error instanceof SafeFsError && error.code === "not-found") return false;
-        throw error;
+        const problem = fsProblem(error, parent);
+        if (problem === null) throw error;
+        diagnostics.push(
+          diagnostic("STORE_FOLDER_UNREADABLE", "error", problem, {
+            path: parent,
+            remediation: "Make it a readable, real folder inside the repository.",
+          }),
+        );
+        return false;
       }
       const path = parent === "" ? segment : `${parent}/${segment}`;
       const entry = entries.find((candidate) => candidate.name === segment);
@@ -166,7 +178,7 @@ export async function scanStore(fs: SafeFileSystem, options: ScanOptions = {}): 
       }
       referenced.set(path, sha256Hex(await fs.readBytes(path)));
     } catch (error) {
-      const problem = fsProblem(error);
+      const problem = fsProblem(error, path);
       if (problem === null) throw error;
       referenced.set(path, null);
       if (!(error instanceof SafeFsError && error.code === "not-found")) {
@@ -190,7 +202,7 @@ async function readRecord(fs: SafeFileSystem, path: string, maxBytes: number): P
     if (size > maxBytes) return { path, sha256: "", size };
     bytes = await fs.readBytes(path);
   } catch (error) {
-    const problem = fsProblem(error);
+    const problem = fsProblem(error, path);
     if (problem === null) throw error;
     return { path, sha256: "", size: 0, readError: problem };
   }
@@ -208,10 +220,11 @@ async function readRecord(fs: SafeFileSystem, path: string, maxBytes: number): P
 /** Scans the store and builds its index; scan problems are merged into the index diagnostics. */
 export async function readStoreIndex(
   fs: SafeFileSystem,
-  options: { applicationId: string; limits?: Partial<StoreLimits> },
+  options: { applicationId: string; limits?: Partial<StoreLimits>; maxReferencedBytes?: number },
 ): Promise<StoreIndex> {
   const scan = await scanStore(fs, {
     maxMetadataBytes: options.limits?.maxMetadataBytes ?? DEFAULT_STORE_LIMITS.maxMetadataBytes,
+    ...(options.maxReferencedBytes === undefined ? {} : { maxReferencedBytes: options.maxReferencedBytes }),
   });
   const index = buildStoreIndex({
     applicationId: options.applicationId,

@@ -31,6 +31,7 @@ export {
   type IndexedArtifact,
   type IndexedChange,
   type IndexedRecord,
+  type IndexedSource,
   type IndexedTask,
   referencedFiles,
   type SourceRecord,
