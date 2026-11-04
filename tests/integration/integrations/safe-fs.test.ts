@@ -146,17 +146,16 @@ describe("writeAtomic", () => {
   test("lets only one of two same-digest replacements succeed", async () => {
     await fs.writeAtomic("race/state.json", bytes("v1"));
     const expectedSha256 = sha256Hex(bytes("v1"));
-    const results = await Promise.allSettled([
-      fs.writeAtomic("race/state.json", bytes("from A"), { expectedSha256 }),
-      fs.writeAtomic("race/state.json", bytes("from B"), { expectedSha256 }),
-    ]);
-    assert.deepEqual(
-      results.map((result) => result.status),
-      ["fulfilled", "rejected"],
+    const contents = ["from A", "from B"];
+    const results = await Promise.allSettled(
+      contents.map((content) => fs.writeAtomic("race/state.json", bytes(content), { expectedSha256 })),
     );
-    const failure = results[1] as PromiseRejectedResult;
+    // Either writer may win (which one reaches the queue first depends on the OS); exactly one must.
+    const winners = results.flatMap((result, index) => (result.status === "fulfilled" ? [contents[index]] : []));
+    assert.equal(winners.length, 1);
+    const failure = results.find((result) => result.status === "rejected") as PromiseRejectedResult;
     assert.ok(failure.reason instanceof SafeFsError && failure.reason.code === "digest-mismatch");
-    assert.equal(text(await fs.readBytes("race/state.json")), "from A");
+    assert.equal(text(await fs.readBytes("race/state.json")), winners[0]);
   });
 
   test("lets only one of two concurrent creates succeed", async () => {
