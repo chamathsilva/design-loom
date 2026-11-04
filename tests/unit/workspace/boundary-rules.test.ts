@@ -44,6 +44,15 @@ describe("sourceViolations rejects", () => {
     ["unprefixed built-in", 'import { spawn } from "child_process";', ctx("handoff")],
     ["network module in a pure package", 'import https from "node:https";', ctx("validation")],
     ["network global in a pure package", 'const r = await fetch("https://example.com");', ctx("baseline")],
+    ["sub-path network built-in", 'import { lookup } from "node:dns/promises";', ctx("workflow")],
+    ["sub-path readline built-in", 'import { createInterface } from "node:readline/promises";', ctx("workflow")],
+    ["prefix-only sqlite built-in", 'import { DatabaseSync } from "node:sqlite";', ctx("artifacts")],
+    ["process.getBuiltinModule", 'const fs = process.getBuiltinModule("node:fs");', ctx("config")],
+    ["createRequire from node:module", 'import { createRequire } from "node:module";', ctx("config")],
+    ["createRequire without an import", 'const r = createRequire(import.meta.url); r("fs");', ctx("config")],
+    ["backtick dynamic import", "await import(`node:fs`);", ctx("validation")],
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: fixture source text containing a template specifier
+    ["template dynamic import", "await import(`node:${name}`);", ctx("validation")],
     ["undeclared third-party package", 'import x from "left-pad";', ctx("workflow")],
     ["undeclared scoped third-party package", 'import x from "@acme/tool/sub";', ctx("workflow")],
   ];
@@ -58,6 +67,8 @@ describe("sourceViolations accepts", () => {
   const cases: Array<[string, string, FileContext]> = [
     ["declared workspace import", 'import { x } from "@design-loom/config";', ctx("workflow", ["@design-loom/config"])],
     ["relative import inside the package", 'import { x } from "./helpers/x.ts";', ctx("config")],
+    ["in-package folder whose name starts with dots", 'import { x } from "./..helpers/x.ts";', ctx("config")],
+    ["parent import that stays in the package", 'import { x } from "../src/x.ts";', ctx("config")],
     ["pure built-in", 'import { createHash } from "node:crypto";', ctx("artifacts")],
     ["I/O built-in in an adapter package", 'import { readFile } from "node:fs/promises";', ctx("integrations")],
     ["network global in cli", 'await fetch("https://example.com");', ctx("cli")],
