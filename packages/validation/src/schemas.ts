@@ -30,7 +30,16 @@ import workspace from "../schemas/workspace.schema.json" with { type: "json" };
 /** Namespace of the bundled schema IDs. Example identifiers, not live endpoints (design doc 16). */
 export const SCHEMA_NAMESPACE = "https://design-loom.example/schemas/v1/";
 
-const SCHEMAS = {
+/** Freezes a JSON value in place, so no caller can change a schema that Ajv has registered. */
+function deepFreeze<T>(value: T): T {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value)) deepFreeze(child);
+  }
+  return value;
+}
+
+const SCHEMAS = deepFreeze({
   application,
   "approval-evidence": approvalEvidence,
   artifact,
@@ -49,7 +58,7 @@ const SCHEMAS = {
   traceability,
   workflow,
   workspace,
-} as const;
+} as const);
 
 export type SchemaKind = keyof typeof SCHEMAS;
 
@@ -59,7 +68,7 @@ export function schemaId(kind: SchemaKind): string {
   return `${SCHEMA_NAMESPACE}${kind}.schema.json`;
 }
 
-/** The bundled schema document for a kind. */
+/** The bundled schema document for a kind. It is deeply frozen: changing it throws. */
 export function schemaFor(kind: SchemaKind): Readonly<Record<string, unknown>> {
   return SCHEMAS[kind];
 }
@@ -67,10 +76,19 @@ export function schemaFor(kind: SchemaKind): Readonly<Record<string, unknown>> {
 export interface SchemaIssue {
   /** JSON Pointer into the validated value, "" for the root. */
   instancePath: string;
-  /** JSON Pointer into the schema, prefixed with the schema's $id. */
+  /**
+   * Where the failing keyword lives: the $id of the schema that holds it, "#", then a JSON Pointer
+   * into that schema. For example `https://design-loom.example/schemas/v1/change.schema.json#/properties/id/type`.
+   * A failure inside a referenced schema names that schema's $id.
+   */
   schemaPath: string;
   keyword: string;
   message: string;
+  /**
+   * Ajv's details for the keyword, with object keys sorted, for example
+   * `{ additionalProperty: "extra" }` or `{ missingProperty: "id" }`.
+   */
+  params: Readonly<Record<string, unknown>>;
 }
 
 export interface SchemaValidationResult {
@@ -128,12 +146,35 @@ export function compileAllSchemas(): void {
   for (const kind of SCHEMA_KINDS) validatorFor(kind);
 }
 
-function toIssue(error: ErrorObject): SchemaIssue {
+const BUNDLED_IDS: readonly string[] = SCHEMA_KINDS.map(schemaId);
+
+/**
+ * Ajv reports "#/..." for the validated schema and "<$id>/..." for a referenced one. Both become
+ * "<$id>#/...".
+ */
+function absoluteSchemaPath(kind: SchemaKind, path: string): string {
+  if (path.startsWith("#")) return `${schemaId(kind)}${path}`;
+  const id = BUNDLED_IDS.find((candidate) => path === candidate || path.startsWith(`${candidate}/`));
+  if (id !== undefined) return `${id}#${path.slice(id.length)}`;
+  return path;
+}
+
+/** A JSON copy of a value with object keys sorted, so equal values serialize identically. */
+function sortedJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortedJson);
+  if (value === null || typeof value !== "object") return value;
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(value).sort()) out[key] = sortedJson((value as Record<string, unknown>)[key]);
+  return out;
+}
+
+function toIssue(kind: SchemaKind, error: ErrorObject): SchemaIssue {
   return {
     instancePath: error.instancePath,
-    schemaPath: error.schemaPath,
+    schemaPath: absoluteSchemaPath(kind, error.schemaPath),
     keyword: error.keyword,
     message: error.message ?? error.keyword,
+    params: sortedJson(error.params) as Record<string, unknown>,
   };
 }
 
@@ -141,16 +182,20 @@ function compareIssues(a: SchemaIssue, b: SchemaIssue): number {
   for (const key of ["instancePath", "keyword", "schemaPath", "message"] as const) {
     if (a[key] !== b[key]) return a[key] < b[key] ? -1 : 1;
   }
-  return 0;
+  const [pa, pb] = [JSON.stringify(a.params), JSON.stringify(b.params)];
+  return pa === pb ? 0 : pa < pb ? -1 : 1;
 }
 
-/** Validates a value against a framework schema. Issues are de-duplicated and sorted. */
+/**
+ * Validates a value against a framework schema. Issues are de-duplicated and sorted; two issues
+ * that differ only in their params (two unknown properties, say) are both kept.
+ */
 export function validateAgainstSchema(kind: SchemaKind, value: unknown): SchemaValidationResult {
   const validate = validatorFor(kind);
   const valid = validate(value) === true;
   const seen = new Set<string>();
   const issues = (validate.errors ?? [])
-    .map(toIssue)
+    .map((error) => toIssue(kind, error))
     .filter((issue) => {
       const key = JSON.stringify(issue);
       if (seen.has(key)) return false;

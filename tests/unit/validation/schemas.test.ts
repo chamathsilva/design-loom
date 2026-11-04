@@ -59,6 +59,14 @@ function refs(node: unknown): string[] {
 }
 
 describe("bundled schemas", () => {
+  test("are frozen, so a caller can't change validation for everyone else", () => {
+    const schema = schemaFor("workspace") as { properties: { schema_version: Record<string, unknown> } };
+    assert.throws(() => {
+      schema.properties.schema_version.const = "changed";
+    }, TypeError);
+    assert.equal(validateAgainstSchema("workspace", read("examples/workspace.json")).valid, true);
+  });
+
   test("cover the 18 framework object kinds", () => {
     assert.equal(SCHEMA_KINDS.length, 18);
   });
@@ -102,14 +110,19 @@ describe("design package examples are valid", () => {
   }
 });
 
+/** The issue a negative case must produce: instance path, keyword and (a subset of) its params. */
+type Expected = [instancePath: string, keyword: string, params?: Record<string, unknown>];
+
 describe("negative mutations are rejected", () => {
   // The design package's 23 negative cases, in the same order.
+  // Each case names the issue that proves it failed for the intended reason.
   // biome-ignore lint/suspicious/noExplicitAny: mutations reach into arbitrary nested fixture JSON
-  const cases: Array<[string, SchemaKind, string, (value: any) => void]> = [
+  const cases: Array<[string, SchemaKind, string, Expected, (value: any) => void]> = [
     [
       "author-approved state",
       "artifact",
       "examples/artifacts/DESIGN-001.json",
+      ["/state", "enum"],
       (a) => {
         a.state = "approved";
       },
@@ -118,6 +131,7 @@ describe("negative mutations are rejected", () => {
       "unknown config field",
       "application",
       "examples/application.json",
+      ["", "additionalProperties", { additionalProperty: "silent_override" }],
       (a) => {
         a.silent_override = true;
       },
@@ -126,6 +140,7 @@ describe("negative mutations are rejected", () => {
       "parent traversal",
       "artifact",
       "examples/artifacts/DESIGN-001.json",
+      ["/content/path", "pattern"],
       (a) => {
         a.content.path = "../outside.md";
       },
@@ -134,6 +149,7 @@ describe("negative mutations are rejected", () => {
       "Windows absolute path",
       "artifact",
       "examples/artifacts/DESIGN-001.json",
+      ["/content/path", "pattern"],
       (a) => {
         a.content.path = "C:\\outside.md";
       },
@@ -142,6 +158,7 @@ describe("negative mutations are rejected", () => {
       "floating branch",
       "handoff",
       "examples/handoff.json",
+      ["/target/starting_commit", "pattern"],
       (a) => {
         a.target.starting_commit = "main";
       },
@@ -150,6 +167,7 @@ describe("negative mutations are rejected", () => {
       "captured source without digest",
       "source",
       "examples/source.json",
+      ["", "required", { missingProperty: "sha256" }],
       (a) => {
         delete a.sha256;
       },
@@ -158,6 +176,7 @@ describe("negative mutations are rejected", () => {
       "executable extension rule",
       "extension",
       "examples/extension/extension.json",
+      ["/rules/0/kind", "enum"],
       (a) => {
         a.rules[0].kind = "shell";
       },
@@ -166,6 +185,7 @@ describe("negative mutations are rejected", () => {
       "duplicate requested baseline role",
       "baseline",
       "examples/baseline.json",
+      ["/required_review_roles", "uniqueItems"],
       (a) => {
         a.required_review_roles = ["qa", "qa"];
       },
@@ -174,6 +194,7 @@ describe("negative mutations are rejected", () => {
       "duplicate configured reviewer role",
       "application",
       "examples/application.json",
+      ["/required_review_roles", "uniqueItems"],
       (a) => {
         a.required_review_roles = ["qa", "qa"];
       },
@@ -182,6 +203,7 @@ describe("negative mutations are rejected", () => {
       "empty command argv",
       "task",
       "examples/task.json",
+      ["/checks/0/argv", "minItems"],
       (a) => {
         a.checks[0].argv = [];
       },
@@ -190,6 +212,7 @@ describe("negative mutations are rejected", () => {
       "unbound task digest",
       "handoff",
       "examples/handoff.json",
+      ["", "required", { missingProperty: "task_digest" }],
       (a) => {
         delete a.task_digest;
       },
@@ -198,6 +221,7 @@ describe("negative mutations are rejected", () => {
       "project artifact with change owner",
       "artifact",
       "examples/shared/artifacts/SHARED-STATUS-001.json",
+      ["", "not"],
       (a) => {
         a.change_id = "CHANGE-001";
       },
@@ -206,6 +230,7 @@ describe("negative mutations are rejected", () => {
       "project artifact with workflow step",
       "artifact",
       "examples/shared/artifacts/SHARED-STATUS-001.json",
+      ["", "not"],
       (a) => {
         a.workflow_step = "contracts";
       },
@@ -214,6 +239,7 @@ describe("negative mutations are rejected", () => {
       "legacy change artifact without change owner",
       "artifact",
       "examples/artifacts/DESIGN-001.json",
+      ["", "required", { missingProperty: "change_id" }],
       (a) => {
         delete a.change_id;
       },
@@ -222,6 +248,7 @@ describe("negative mutations are rejected", () => {
       "empty baseline predecessor list",
       "baseline",
       "examples/baseline.json",
+      ["/supersedes", "minItems"],
       (a) => {
         a.supersedes = [];
       },
@@ -230,6 +257,7 @@ describe("negative mutations are rejected", () => {
       "nested effective application field",
       "effective-config",
       "examples/effective-config.json",
+      ["/configuration/application", "additionalProperties", { additionalProperty: "silent_override" }],
       (a) => {
         a.configuration.application.silent_override = true;
       },
@@ -238,6 +266,7 @@ describe("negative mutations are rejected", () => {
       "read context without digest",
       "context",
       "examples/context.json",
+      ["/references/0", "required", { missingProperty: "sha256" }],
       (a) => {
         delete a.references[0].sha256;
       },
@@ -246,6 +275,7 @@ describe("negative mutations are rejected", () => {
       "read source context without revision",
       "context",
       "examples/context.json",
+      ["/references/0", "required", { missingProperty: "revision" }],
       (a) => {
         delete a.references[0].revision;
       },
@@ -254,6 +284,7 @@ describe("negative mutations are rejected", () => {
       "verified review without baseline binding",
       "handoff",
       "examples/handoff-unreviewed.json",
+      ["", "required", { missingProperty: "baseline_id" }],
       (a) => {
         a.review_status = "verified";
       },
@@ -262,6 +293,7 @@ describe("negative mutations are rejected", () => {
       "partial baseline binding",
       "handoff",
       "examples/handoff-unreviewed.json",
+      ["", "dependentRequired", { missingProperty: "baseline_digest" }],
       (a) => {
         a.baseline_id = "BASELINE-001";
       },
@@ -270,6 +302,7 @@ describe("negative mutations are rejected", () => {
       "empty declared campaign coverage",
       "artifact",
       "examples/late-qa/QA-BATCH-001.json",
+      ["/covered_change_ids", "minItems"],
       (a) => {
         a.covered_change_ids = [];
       },
@@ -278,6 +311,7 @@ describe("negative mutations are rejected", () => {
       "unavailable context without recorded gap",
       "context",
       "examples/context.json",
+      ["/gaps", "minItems"],
       (a) => {
         a.gaps = [];
       },
@@ -286,6 +320,7 @@ describe("negative mutations are rejected", () => {
       "legacy handoff readiness field",
       "handoff",
       "examples/handoff-unreviewed.json",
+      ["", "additionalProperties", { additionalProperty: "readiness" }],
       (a) => {
         a.readiness = a.snapshot_integrity;
         delete a.snapshot_integrity;
@@ -297,30 +332,62 @@ describe("negative mutations are rejected", () => {
     assert.equal(cases.length, 23);
   });
 
-  for (const [name, kind, path, mutate] of cases) {
+  for (const [name, kind, path, [instancePath, keyword, params = {}], mutate] of cases) {
     test(name, () => {
       const value = read(path);
       mutate(value);
       const result = validateAgainstSchema(kind, value);
       assert.equal(result.valid, false);
-      assert.ok(result.issues.length > 0);
+      const match = result.issues.find(
+        (issue) =>
+          issue.instancePath === instancePath &&
+          issue.keyword === keyword &&
+          Object.entries(params).every(([key, expected]) => issue.params[key] === expected),
+      );
+      assert.ok(match, `expected ${keyword} at "${instancePath}", got ${JSON.stringify(result.issues)}`);
     });
   }
 });
 
 describe("results", () => {
-  test("are deterministic: the same input gives the same sorted issues", () => {
-    const value = { id: 7, extra: true };
-    const first = validateAgainstSchema("change", value);
-    const second = validateAgainstSchema("change", structuredClone(value));
-    assert.deepEqual(first, second);
-    const sorted = [...first.issues].sort((a, b) =>
-      a.instancePath === b.instancePath ? a.keyword.localeCompare(b.keyword) : a.instancePath < b.instancePath ? -1 : 1,
-    );
+  test("are deterministic: the same input gives the same, fully specified issues", () => {
+    const value = { ...read("examples/workspace.json"), zeta: 1, alpha: 2 };
+    const first = validateAgainstSchema("workspace", value);
+    assert.deepEqual(first, validateAgainstSchema("workspace", structuredClone(value)));
+    const path = `${schemaId("workspace")}#/additionalProperties`;
+    const message = "must NOT have additional properties";
+    assert.deepEqual(first.issues, [
+      {
+        instancePath: "",
+        schemaPath: path,
+        keyword: "additionalProperties",
+        message,
+        params: { additionalProperty: "alpha" },
+      },
+      {
+        instancePath: "",
+        schemaPath: path,
+        keyword: "additionalProperties",
+        message,
+        params: { additionalProperty: "zeta" },
+      },
+    ]);
+  });
+
+  test("name the schema that holds the failing keyword", () => {
+    const change = validateAgainstSchema("change", { ...read("examples/change.json"), id: 7 });
     assert.deepEqual(
-      first.issues.map((i) => i.instancePath),
-      sorted.map((i) => i.instancePath),
+      change.issues.map((issue) => issue.schemaPath),
+      [`${schemaId("change")}#/properties/id/type`],
     );
+    const config = read("examples/effective-config.json") as { configuration: { application: object } };
+    config.configuration.application = { ...config.configuration.application, id: 7 };
+    const nested = validateAgainstSchema("effective-config", config);
+    assert.ok(nested.issues.length > 0);
+    for (const issue of nested.issues) {
+      assert.match(issue.schemaPath, /^https:\/\/design-loom\.example\/schemas\/v1\/[a-z-]+\.schema\.json#\//);
+    }
+    assert.ok(nested.issues.some((issue) => issue.schemaPath.startsWith(`${schemaId("application")}#/`)));
   });
 
   test("check formats: an invalid date-time is rejected", () => {

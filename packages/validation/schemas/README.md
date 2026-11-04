@@ -22,3 +22,7 @@ Exact copies of the 18 Draft 2020-12 schemas from the Design Loom implementation
 | `traceability.schema.json` | `1eaa2a246d4425fddb8b25b105df45ac865edee2bfcfc5b24a4079ed80776e4d` |
 | `workflow.schema.json` | `9f6a3764ed9e6ddc5c13cbcd3388338c2884e784c77af46af31bbb6d02bdd824` |
 | `workspace.schema.json` | `79c3124e2b2bc551990eddc0c7afc3988d54a84c874e49cc2eb21c27364c2e8e` |
+
+## Known issue in edition 0.1.0
+
+The relative-path patterns (15 of them across 9 schemas) use `(?!.*…)` lookaheads. In JavaScript, `.` doesn't match a line break, so the backslash and `..` checks stop at the first newline: `docs\n/../../outside.md` passes the artifact schema. The fix belongs in the design package: forbid control characters in those patterns (for example `[^\u0000-\u001f]+$` instead of `[^\u0000]+$`). Until then, the path policy in `@design-loom/config` (`normalizeRelativePath`) rejects control characters, `..` and backslashes wherever a path is used, so a schema-valid path like this still can't reach the file system.
