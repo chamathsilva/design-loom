@@ -3,7 +3,8 @@
 
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -76,6 +77,33 @@ describe("route A: direct script", () => {
       run(process.execPath, [CLI, "diagnose", "--root", "relative/path"], { env: ENV }),
       (error: { code?: number }) => error.code === 2,
     );
+  });
+
+  test("write refuses a root that doesn't exist, without creating it", async () => {
+    const missing = join(designRoot, "no-such-checkout");
+    await assert.rejects(
+      run(process.execPath, [CLI, "write", "--root", missing], { env: ENV }),
+      (error: { code?: number }) => error.code === 2,
+    );
+    assert.equal(existsSync(missing), false);
+  });
+
+  test("write refuses a .design-loom folder that links outside the checkout", async (t) => {
+    const checkout = join(designRoot, "linked-checkout");
+    const outside = join(designRoot, "outside");
+    await mkdir(checkout);
+    await mkdir(outside);
+    try {
+      await symlink(outside, join(checkout, ".design-loom"), process.platform === "win32" ? "junction" : "dir");
+    } catch {
+      t.skip("symlinks need extra privileges on this OS");
+      return;
+    }
+    await assert.rejects(
+      run(process.execPath, [CLI, "write", "--root", checkout], { env: ENV }),
+      (error: { code?: number }) => error.code === 2,
+    );
+    assert.deepEqual(await readdir(outside), []);
   });
 
   test("never prints token values", async () => {

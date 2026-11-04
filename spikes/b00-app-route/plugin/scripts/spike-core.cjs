@@ -20,10 +20,13 @@ function toolVersion(command, args) {
   }
 }
 
-/** Exit code of `gh auth status` only: 0 means logged in. Output is discarded. */
+/** Exit code of `gh auth status` for the active account only: 0 means logged in. Output is discarded. */
 function ghAuthExitCode() {
   try {
-    const result = spawnSync("gh", ["auth", "status", "--hostname", "github.com"], { timeout: 10_000, shell: false });
+    const result = spawnSync("gh", ["auth", "status", "--active", "--hostname", "github.com"], {
+      timeout: 10_000,
+      shell: false,
+    });
     return result.error ? null : result.status;
   } catch {
     return null;
@@ -75,9 +78,24 @@ function requireAbsoluteRoot(root) {
   return path.resolve(root);
 }
 
+/** stat that reports an access error (for example a sandbox denial) instead of throwing. */
+function statOrError(target) {
+  try {
+    return { stat: fs.statSync(target, { throwIfNoEntry: false }) };
+  } catch (error) {
+    return { error: error.code || error.message };
+  }
+}
+
 async function diagnose({ root, route }) {
   const absoluteRoot = requireAbsoluteRoot(root);
-  const stat = fs.statSync(absoluteRoot, { throwIfNoEntry: false });
+  const { stat, error: statError } = statOrError(absoluteRoot);
+  let hasGit;
+  try {
+    hasGit = fs.existsSync(path.join(absoluteRoot, ".git"));
+  } catch (error) {
+    hasGit = `error: ${error.code || error.message}`;
+  }
   const envNames = Object.keys(process.env)
     .filter((name) => /^(COPILOT|GITHUB_COPILOT|VSCODE|CLAUDE|PLUGIN_)/.test(name))
     .sort();
@@ -95,9 +113,9 @@ async function diagnose({ root, route }) {
     process: { cwd: process.cwd() },
     root: {
       path: absoluteRoot,
-      exists: Boolean(stat),
+      exists: statError ? `unknown (${statError})` : Boolean(stat),
       isDirectory: Boolean(stat?.isDirectory()),
-      hasGit: fs.existsSync(path.join(absoluteRoot, ".git")),
+      hasGit,
     },
     tools: {
       git: toolVersion("git", ["--version"]),
@@ -111,20 +129,45 @@ async function diagnose({ root, route }) {
     sandbox: {
       network_api_github_com: await networkCheck(),
       tempDirWritable: canWrite(os.tmpdir()),
-      rootWritable: stat?.isDirectory() ? canWrite(absoluteRoot) : "root missing",
+      rootWritable: stat?.isDirectory()
+        ? canWrite(absoluteRoot)
+        : statError
+          ? `unknown (${statError})`
+          : "root missing",
     },
     environmentVariableNames: envNames,
   };
 }
 
 /** Writes one run report inside <root>/.design-loom/runs/ via a temp file and rename, then reads it back. */
+function refuse(message) {
+  const error = new Error(message);
+  error.exitCode = 2;
+  return error;
+}
+
 function write({ root, route }) {
   const absoluteRoot = requireAbsoluteRoot(root);
-  const runs = path.join(absoluteRoot, ".design-loom", "runs");
-  fs.mkdirSync(runs, { recursive: true });
+  // Never create the checkout itself: a typo or stale worktree path must fail, not "succeed".
+  if (!fs.statSync(absoluteRoot, { throwIfNoEntry: false })?.isDirectory()) {
+    throw refuse(`root is not an existing folder: ${absoluteRoot}`);
+  }
+  const realRoot = fs.realpathSync(absoluteRoot);
+  // Create .design-loom/runs one level at a time, checking each folder before using it, so a
+  // symlinked .design-loom or runs folder can't send the report (or a new folder) outside.
+  let realRuns = realRoot;
+  for (const segment of [".design-loom", "runs"]) {
+    const next = path.join(realRuns, segment);
+    if (!fs.existsSync(next)) fs.mkdirSync(next);
+    realRuns = fs.realpathSync(next);
+    const fromRoot = path.relative(realRoot, realRuns);
+    if (fromRoot.startsWith("..") || path.isAbsolute(fromRoot)) {
+      throw refuse(`.design-loom/runs resolves outside the checkout: ${realRuns}`);
+    }
+  }
   const name = `b00-spike-${route}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
-  const target = path.join(runs, name);
-  const temp = path.join(runs, `.${name}.tmp`);
+  const target = path.join(realRuns, name);
+  const temp = path.join(realRuns, `.${name}.tmp`);
   const body = `${JSON.stringify({ schema: SCHEMA, route, wroteAt: new Date().toISOString() }, null, 2)}\n`;
   fs.writeFileSync(temp, body, { flag: "wx" });
   fs.renameSync(temp, target);
@@ -132,7 +175,7 @@ function write({ root, route }) {
   return {
     schema: SCHEMA,
     route,
-    written: path.relative(absoluteRoot, target).split(path.sep).join("/"),
+    written: path.relative(realRoot, target).split(path.sep).join("/"),
     bytes: Buffer.byteLength(body),
     readBack,
     note: "Run reports live in .design-loom/runs/, which the design repo's .gitignore excludes.",
