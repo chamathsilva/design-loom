@@ -10,6 +10,7 @@
  */
 
 import {
+  CanonicalJsonError,
   caseFoldKey,
   compareCodePoints,
   type Diagnostic,
@@ -102,6 +103,7 @@ export interface TaskRecord {
 export interface TraceabilityRecord {
   change_id: string;
   covered_change_ids?: string[];
+  requirements: { id: string; source_id: string }[];
   design_links: { requirement_id: string; artifact_ids: string[] }[];
 }
 
@@ -133,6 +135,11 @@ export interface BaselineRecord {
 
 // ---------------------------------------------------------------------------------------------------
 // Output
+
+export interface IndexedSource extends IndexedRecord<SourceRecord> {
+  /** True when the snapshot exists with the recorded hash; false when it doesn't; null without a snapshot. */
+  snapshotVerified: boolean | null;
+}
 
 export interface IndexedRecord<T> {
   id: string;
@@ -169,7 +176,7 @@ export interface StoreIndex {
   /** Maps are keyed by ID and iterate in ID order. */
   changes: ReadonlyMap<string, IndexedChange>;
   artifacts: ReadonlyMap<string, IndexedArtifact>;
-  sources: ReadonlyMap<string, IndexedRecord<SourceRecord>>;
+  sources: ReadonlyMap<string, IndexedSource>;
   tasks: ReadonlyMap<string, IndexedTask>;
   baselines: ReadonlyMap<string, IndexedRecord<BaselineRecord>>;
   /** Direct dependents of each artifact (artifacts whose depends_on names it), in ID order. */
@@ -347,7 +354,7 @@ export function buildStoreIndex(input: StoreInput): StoreIndex {
   // 2. Register IDs. Artifact, task, source, baseline and change IDs are unique ignoring case.
   const changes = new Map<string, IndexedChange>();
   const artifacts = new Map<string, IndexedArtifact>();
-  const sources = new Map<string, IndexedRecord<SourceRecord>>();
+  const sources = new Map<string, IndexedSource>();
   const tasks = new Map<string, IndexedTask>();
   const baselines = new Map<string, IndexedRecord<BaselineRecord>>();
   const folded = new Map<string, Map<string, string>>();
@@ -409,7 +416,7 @@ export function buildStoreIndex(input: StoreInput): StoreIndex {
         break;
       case "source":
         if (claim("source", location.id, file.path))
-          sources.set(location.id, { ...base, record: value as unknown as SourceRecord });
+          sources.set(location.id, { ...base, record: value as unknown as SourceRecord, snapshotVerified: null });
         break;
       case "baseline":
         if (claim("baseline", location.id, file.path)) {
@@ -472,6 +479,18 @@ export function buildStoreIndex(input: StoreInput): StoreIndex {
     missingCode: string,
     mismatchCode: string,
   ): boolean => {
+    // Look files up by their normalized path, as referencedFiles hashed them.
+    const normalized = safePath(path);
+    if (normalized === null || normalized !== path) {
+      report(
+        "STORE_UNSAFE_PATH",
+        "error",
+        `${JSON.stringify(path)} is not a normalized path inside the repository`,
+        where,
+        'Use a relative path with "/" separators and no "." or ".." segments.',
+      );
+      return false;
+    }
     const actual = input.referenced.get(path);
     if (actual === undefined || actual === null) {
       report(
@@ -543,7 +562,21 @@ export function buildStoreIndex(input: StoreInput): StoreIndex {
       attachmentPaths.add(attachment.path);
     }
     artifact.bytesVerified = verified;
-    artifact.semanticDigest = verified ? artifactSemanticDigest(record) : null;
+    artifact.semanticDigest = null;
+    if (verified) {
+      try {
+        artifact.semanticDigest = artifactSemanticDigest(record);
+      } catch (error) {
+        if (!(error instanceof CanonicalJsonError)) throw error;
+        report(
+          "STORE_NOT_CANONICAL",
+          "error",
+          `artifact can't be hashed with canonical-json-v1: ${error.message}`,
+          artifact.path,
+          "Use integers, strings, booleans, null, arrays and objects only; write fractions as strings.",
+        );
+      }
+    }
   }
   for (const source of sources.values()) {
     const { record } = source;
@@ -560,6 +593,7 @@ export function buildStoreIndex(input: StoreInput): StoreIndex {
       continue;
     }
     if (!record.snapshot_path.startsWith("sources/snapshots/")) {
+      source.snapshotVerified = false;
       report(
         "STORE_SNAPSHOT_OUTSIDE",
         "error",
@@ -570,6 +604,7 @@ export function buildStoreIndex(input: StoreInput): StoreIndex {
       continue;
     }
     if (record.sha256 === undefined) {
+      source.snapshotVerified = false;
       report(
         "STORE_SNAPSHOT_UNBOUND",
         "error",
@@ -579,7 +614,7 @@ export function buildStoreIndex(input: StoreInput): StoreIndex {
       );
       continue;
     }
-    checkBytes(
+    source.snapshotVerified = checkBytes(
       record.snapshot_path,
       record.sha256,
       pointerPath(source.path, "/snapshot_path"),
@@ -673,6 +708,9 @@ export function buildStoreIndex(input: StoreInput): StoreIndex {
     }
   }
   for (const entry of traceability.values()) {
+    entry.record.requirements.forEach((requirement, index) => {
+      needSource(requirement.source_id, pointerPath(entry.path, `/requirements/${index}/source_id`));
+    });
     entry.record.covered_change_ids?.forEach((id, index) => {
       needChange(id, pointerPath(entry.path, `/covered_change_ids/${index}`));
     });
@@ -747,24 +785,24 @@ function reportCycles(artifacts: ReadonlyMap<string, IndexedArtifact>, report: R
 
   for (const start of [...artifacts.keys()].sort(compareCodePoints)) {
     if (index.has(start)) continue;
-    const work: { id: string; next: number }[] = [{ id: start, next: 0 }];
+    // Each frame keeps its dependency list, so it is built once per artifact, not once per edge.
+    const work: { id: string; targets: string[]; next: number }[] = [{ id: start, targets: edges(start), next: 0 }];
     index.set(start, counter);
     low.set(start, counter);
     counter++;
     stack.push(start);
     onStack.add(start);
     while (work.length > 0) {
-      const frame = work[work.length - 1] as { id: string; next: number };
-      const targets = edges(frame.id);
-      if (frame.next < targets.length) {
-        const target = targets[frame.next++] as string;
+      const frame = work[work.length - 1] as (typeof work)[number];
+      if (frame.next < frame.targets.length) {
+        const target = frame.targets[frame.next++] as string;
         if (!index.has(target)) {
           index.set(target, counter);
           low.set(target, counter);
           counter++;
           stack.push(target);
           onStack.add(target);
-          work.push({ id: target, next: 0 });
+          work.push({ id: target, targets: edges(target), next: 0 });
         } else if (onStack.has(target)) {
           low.set(frame.id, Math.min(low.get(frame.id) as number, index.get(target) as number));
         }
@@ -781,7 +819,7 @@ function reportCycles(artifacts: ReadonlyMap<string, IndexedArtifact>, report: R
           onStack.delete(member);
           group.push(member);
         } while (member !== frame.id);
-        const selfLoop = group.length === 1 && edges(frame.id).includes(frame.id);
+        const selfLoop = group.length === 1 && frame.targets.includes(frame.id);
         if (group.length > 1 || selfLoop) {
           group.sort(compareCodePoints);
           const first = artifacts.get(group[0] as string);
@@ -806,15 +844,21 @@ function reportDepth(artifacts: ReadonlyMap<string, IndexedArtifact>, limit: num
   // Iterative post-order: depth(id) = 1 + max depth of its dependencies, ignoring back edges.
   for (const start of [...artifacts.keys()].sort(compareCodePoints)) {
     if (depth.has(start)) continue;
-    const work: { id: string; expanded: boolean }[] = [{ id: start, expanded: false }];
+    const targetsOf = (id: string): string[] =>
+      (artifacts.get(id)?.record.depends_on ?? []).filter((next) => artifacts.has(next));
+    const work: { id: string; targets: string[]; expanded: boolean }[] = [
+      { id: start, targets: targetsOf(start), expanded: false },
+    ];
     while (work.length > 0) {
-      const frame = work[work.length - 1] as { id: string; expanded: boolean };
-      const targets = (artifacts.get(frame.id)?.record.depends_on ?? []).filter((next) => artifacts.has(next));
+      const frame = work[work.length - 1] as (typeof work)[number];
+      const { targets } = frame;
       if (!frame.expanded) {
         frame.expanded = true;
         visiting.add(frame.id);
         for (const target of targets) {
-          if (!depth.has(target) && !visiting.has(target)) work.push({ id: target, expanded: false });
+          if (!depth.has(target) && !visiting.has(target)) {
+            work.push({ id: target, targets: targetsOf(target), expanded: false });
+          }
         }
         continue;
       }

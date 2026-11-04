@@ -117,6 +117,45 @@ describe("store reader", () => {
     }
   });
 
+  test("an unreadable parent of a scan root is reported and the other roots are still scanned", async (t) => {
+    if (process.platform === "win32" || process.getuid?.() === 0) {
+      t.skip("permission bits don't block reads here");
+      return;
+    }
+    const root = await writeRepository("unreadable-shared");
+    await chmod(join(root, "shared"), 0o000);
+    try {
+      const result = await readStoreIndex(await SafeFileSystem.open(root), { applicationId: SAMPLE_APPLICATION_ID });
+      const unreadable = result.diagnostics.find((entry) => entry.code === "STORE_FOLDER_UNREADABLE");
+      assert.equal(unreadable?.path, "shared");
+      assert.ok(!unreadable?.message.includes(root), "no absolute path in the message");
+      assert.ok(result.sources.has("src-catalog-requirement"));
+      assert.ok(result.baselines.has("BASELINE-001"));
+    } finally {
+      await chmod(join(root, "shared"), 0o755);
+    }
+  });
+
+  test("a record with a byte-order mark is rejected by the strict parser", async () => {
+    const repo = sampleRepository();
+    const path = "changes/CHANGE-001/artifacts/REVIEW-001.json";
+    repo.set(path, new Uint8Array([0xef, 0xbb, 0xbf, ...(repo.get(path) as Uint8Array)]));
+    const root = await writeRepository("bom", repo);
+    const result = await readStoreIndex(await SafeFileSystem.open(root), { applicationId: SAMPLE_APPLICATION_ID });
+    const unreadable = result.diagnostics.find((entry) => entry.code === "STORE_RECORD_UNREADABLE");
+    assert.equal(unreadable?.path, path);
+    assert.match(unreadable?.message ?? "", /byte-order mark/);
+  });
+
+  test("readStoreIndex passes the referenced-file limit through", async () => {
+    const root = await writeRepository("referenced-limit");
+    const result = await readStoreIndex(await SafeFileSystem.open(root), {
+      applicationId: SAMPLE_APPLICATION_ID,
+      maxReferencedBytes: 10,
+    });
+    assert.ok(result.diagnostics.some((entry) => entry.code === "STORE_REFERENCE_TOO_LARGE"));
+  });
+
   test("content behind a symlink that leaves the root is not hashed", async (t) => {
     const root = await writeRepository("linked-content");
     const outside = join(scratch, "outside-content");

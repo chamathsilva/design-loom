@@ -102,6 +102,15 @@ describe("lineage checks", () => {
     assert.equal(report.byChange.size, 0);
   });
 
+  test("a baseline ID used twice is rejected", () => {
+    const report = analyzeLineage([baseline("B1"), baseline("B1", undefined, "CHANGE-002")]);
+    assert.deepEqual(
+      report.diagnostics.map((entry) => entry.code),
+      ["LINEAGE_DUPLICATE_ID", "LINEAGE_DUPLICATE_ID"],
+    );
+    assert.deepEqual(report.invalidChanges, ["CHANGE-001", "CHANGE-002"]);
+  });
+
   test("cycles are rejected and block selection for that change only", () => {
     const all = [baseline("B1", ["B2"]), baseline("B2", ["B1"]), baseline("C1", undefined, "CHANGE-002")];
     const report = analyzeLineage(all);

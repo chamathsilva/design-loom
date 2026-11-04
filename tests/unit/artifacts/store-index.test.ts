@@ -195,6 +195,17 @@ describe("graph queries", () => {
     assert.deepEqual(referenceClosure(index(repo), ["QA-BATCH-001"]).unverified, ["REQDOC-001"]);
   });
 
+  test("a closure lists sources whose snapshot didn't verify", () => {
+    assert.deepEqual(referenceClosure(result, ["QA-BATCH-001"]).unverifiedSources, []);
+    const repo = sampleRepository();
+    repo.set("sources/snapshots/catalog-requirement.md", new TextEncoder().encode("tampered\n"));
+    const closure = referenceClosure(index(repo), ["QA-BATCH-001"]);
+    assert.deepEqual(closure.unverifiedSources, ["src-catalog-requirement"]);
+    assert.equal(index(repo).sources.get("src-catalog-requirement")?.snapshotVerified, false);
+    assert.equal(result.sources.get("src-catalog-requirement")?.snapshotVerified, true);
+    assert.equal(result.sources.get("src-optional-notes")?.snapshotVerified, null);
+  });
+
   test("a closure reports IDs the index doesn't have", () => {
     assert.deepEqual(referenceClosure(result, ["NOPE-001"]).missing, ["NOPE-001"]);
   });
@@ -426,6 +437,38 @@ describe("store index: problems", () => {
     assert.equal(repeated?.path, "changes/CHANGE-001/artifacts/QA-001.json#/attachments/1");
     assert.equal(result.artifacts.get("QA-001")?.semanticDigest, null);
     assert.ok(result.artifacts.get("DESIGN-001")?.semanticDigest);
+  });
+
+  test("a path that isn't normalized is reported as such, not as missing", () => {
+    const repo = sampleRepository();
+    editRecord(repo, DESIGN, (value) =>
+      Object.assign(value, {
+        content: { ...(value.content as object), path: "changes/CHANGE-001/./content/engineering.md" },
+      }),
+    );
+    const result = index(repo);
+    assert.ok(added(result).includes("STORE_UNSAFE_PATH"), added(result).join());
+    assert.ok(!added(result).includes("STORE_CONTENT_MISSING"));
+  });
+
+  test("a value canonical JSON can't hash fails only its own artifact", () => {
+    const input = storeInput(sampleRepository());
+    const record = input.records.find((file) => file.path === DESIGN);
+    assert.ok(record);
+    record.value = { ...(record.value as object), payload: { ratio: 0.5 } };
+    const result = buildStoreIndex(input);
+    assert.ok(codes(result).includes("STORE_NOT_CANONICAL"));
+    assert.equal(result.artifacts.get("DESIGN-001")?.semanticDigest, null);
+    assert.ok(result.artifacts.get("REQDOC-001")?.semanticDigest);
+  });
+
+  test("traceability requirements must name known sources", () => {
+    const repo = sampleRepository();
+    editRecord(repo, "changes/CHANGE-001/traceability.json", (value) => {
+      (value.requirements as { source_id: string }[])[0]!.source_id = "src-ghost";
+    });
+    const unknown = index(repo).diagnostics.find((entry) => entry.code === "STORE_UNKNOWN_SOURCE");
+    assert.equal(unknown?.path, "changes/CHANGE-001/traceability.json#/requirements/0/source_id");
   });
 
   test("unverified bytes leave the semantic digest unset", () => {
