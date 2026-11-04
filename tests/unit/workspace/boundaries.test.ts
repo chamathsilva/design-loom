@@ -5,10 +5,10 @@ import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { SCOPE, sourceViolations } from "./boundary-rules.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..", "..");
 const PACKAGES_DIR = join(ROOT, "packages");
-const SCOPE = "@design-loom/";
 
 /** Packages named in design doc 02. Adding one is a design change, not a refactor. */
 const EXPECTED_PACKAGES = [
@@ -38,6 +38,8 @@ interface PackageJson {
   type?: string;
   exports?: Record<string, string>;
   dependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
 }
 
 function readPackage(dir: string): PackageJson {
@@ -51,11 +53,12 @@ function packageDirs(): string[] {
     .sort();
 }
 
+/** Every file under a package's src directory, whatever its extension. */
 function sourceFiles(dir: string): string[] {
   const srcDir = join(PACKAGES_DIR, dir, "src");
-  return readdirSync(srcDir, { recursive: true, encoding: "utf8" })
-    .filter((file) => file.endsWith(".ts"))
-    .map((file) => join(srcDir, file));
+  return readdirSync(srcDir, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => join(entry.parentPath, entry.name));
 }
 
 function internalDeps(pkg: PackageJson): string[] {
@@ -78,6 +81,18 @@ describe("workspace packages", () => {
       assert.equal(pkg.type, "module");
       assert.deepEqual(pkg.exports, { ".": "./src/index.ts" });
       assert.ok(existsSync(join(PACKAGES_DIR, dir, "src", "index.ts")));
+    });
+
+    test(`${dir} declares no peer or optional dependencies`, () => {
+      const pkg = readPackage(dir);
+      assert.equal(pkg.peerDependencies, undefined);
+      assert.equal(pkg.optionalDependencies, undefined);
+    });
+
+    test(`${dir} sources are TypeScript only, so every file is boundary-checked`, () => {
+      for (const file of sourceFiles(dir)) {
+        assert.ok(file.endsWith(".ts") && !file.endsWith(".d.ts"), `unexpected source file ${file}`);
+      }
     });
   }
 });
@@ -128,16 +143,19 @@ describe("dependency boundaries", () => {
     for (const dir of EXPECTED_PACKAGES) visit(dir, []);
   });
 
-  test("source imports of workspace packages are declared dependencies", () => {
-    const importPattern = /\bfrom\s+["']@design-loom\/([a-z-]+)["']|\bimport\(\s*["']@design-loom\/([a-z-]+)["']/g;
+  test("source files respect import and I/O boundaries", () => {
+    // Rules and their negative cases live in boundary-rules.ts and boundary-rules.test.ts.
     for (const dir of EXPECTED_PACKAGES) {
-      const declared = new Set(graph.get(dir));
+      const declared = new Set(Object.keys(readPackage(dir).dependencies ?? {}));
+      const packageRoot = join(PACKAGES_DIR, dir);
       for (const file of sourceFiles(dir)) {
-        for (const match of readFileSync(file, "utf8").matchAll(importPattern)) {
-          const target = match[1] ?? match[2] ?? "";
-          assert.notEqual(target, dir, `${file} imports its own package by name`);
-          assert.ok(declared.has(target), `${file} imports undeclared @design-loom/${target}`);
-        }
+        const violations = sourceViolations(readFileSync(file, "utf8"), {
+          packageDir: dir,
+          packageRoot,
+          file,
+          declared,
+        });
+        assert.deepEqual(violations, [], file);
       }
     }
   });

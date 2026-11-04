@@ -30,13 +30,16 @@
 
 ## Package boundaries
 
-The eight packages come from design doc 02. `tests/unit/workspace/boundaries.test.ts` enforces these rules:
+The eight packages come from design doc 02. `tests/unit/workspace/boundaries.test.ts` enforces these rules, using the checker in `boundary-rules.ts`, whose negative cases live in `boundary-rules.test.ts`:
 
-- Every package is private ESM and exports `src/index.ts`.
-- A package may only import workspace packages it declares as dependencies.
-- Nothing depends on `cli`, and only `cli` may depend on `integrations`, which keeps provider access out of pure logic.
+- Every package is private ESM, exports `src/index.ts`, contains only `.ts` sources, and declares no peer or optional dependencies.
+- A package may only import workspace packages it declares, and only by package root: no deep `@design-loom/x/...` imports, and no relative paths that leave the package. This covers static, type, re-export, side-effect, dynamic and `require` imports.
+- Nothing depends on `cli`, and only `cli` may depend on `integrations`.
+- **Only `cli` and `integrations` may do I/O.** Other packages may not import file-system, network, process or thread modules (for example `node:fs`, `node:https`, `node:child_process`) or call `fetch`. They work on data passed in, which keeps them pure and testable.
 - The internal dependency graph has no cycles.
 - Third-party runtime dependencies must be added to the allowlist in that test. They end up bundled into the plugin, so each one is a deliberate choice.
+
+Imports are found by pattern matching, not by parsing, so the check is deliberately strict: an import-like string in a comment can also be flagged.
 
 Add internal dependencies only when code actually needs them.
 
