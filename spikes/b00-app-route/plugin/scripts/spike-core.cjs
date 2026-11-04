@@ -32,7 +32,6 @@ function ghCredentialStored() {
       encoding: "utf8",
       timeout: 10_000,
       shell: false,
-      env: { ...process.env, GH_PROMPT_DISABLED: "1", GH_NO_UPDATE_NOTIFIER: "1" },
     });
     if (result.error) return null;
     return result.status === 0 && result.stdout.trim().length > 0;
@@ -106,7 +105,11 @@ async function diagnose({ root, route }) {
   }
   const envNames = Object.keys(process.env)
     .filter((name) => /^(COPILOT|GITHUB_COPILOT|VSCODE|CLAUDE|PLUGIN_)/.test(name))
-    .sort();
+    .sort((a, b) => (a < b ? -1 : Number(a > b)));
+  let rootWritable;
+  if (stat?.isDirectory()) rootWritable = canWrite(absoluteRoot);
+  else if (statError) rootWritable = `unknown (${statError})`;
+  else rootWritable = "root missing";
   return {
     schema: SCHEMA,
     route,
@@ -138,11 +141,7 @@ async function diagnose({ root, route }) {
     sandbox: {
       network_api_github_com: await networkCheck(),
       tempDirWritable: canWrite(os.tmpdir()),
-      rootWritable: stat?.isDirectory()
-        ? canWrite(absoluteRoot)
-        : statError
-          ? `unknown (${statError})`
-          : "root missing",
+      rootWritable,
     },
     environmentVariableNames: envNames,
   };
