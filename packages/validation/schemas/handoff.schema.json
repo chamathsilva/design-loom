@@ -1,0 +1,269 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-loom.example/schemas/v1/handoff.schema.json",
+  "title": "Design Loom handoff",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "application_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "change_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "baseline_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "baseline_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "design_repo_commit": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "repository_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+        },
+        "starting_commit": {
+          "type": "string",
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+        }
+      },
+      "required": [
+        "repository_id",
+        "starting_commit"
+      ],
+      "additionalProperties": false
+    },
+    "artifact_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "source_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "requirement_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "allowed_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?![A-Za-z]:)[^\\u0000]+$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "excluded_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?![A-Za-z]:)[^\\u0000]+$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "dependency_tasks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "repository_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "argv": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1
+          },
+          "working_directory": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?![A-Za-z]:)[^\\u0000]+$"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "repository_id",
+          "argv",
+          "working_directory",
+          "required"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "stop_conditions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "framework_lock_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "repository_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?![A-Za-z]:)[^\\u0000]+$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "repository_id",
+          "path",
+          "sha256"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]*\\.[a-z0-9.-]+$"
+      },
+      "additionalProperties": true
+    },
+    "task_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "review_status": {
+      "enum": [
+        "not_requested",
+        "pending",
+        "verified",
+        "blocked"
+      ]
+    },
+    "context": {
+      "$ref": "https://design-loom.example/schemas/v1/context.schema.json"
+    },
+    "snapshot_integrity": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "verified"
+      ],
+      "description": "Snapshot byte/scope integrity under applicable policy. Display alongside review_status. This field cannot establish human approval."
+    }
+  },
+  "required": [
+    "schema_version",
+    "task_id",
+    "application_id",
+    "change_id",
+    "design_repo_commit",
+    "target",
+    "artifact_ids",
+    "source_ids",
+    "requirement_ids",
+    "allowed_paths",
+    "excluded_paths",
+    "dependency_tasks",
+    "checks",
+    "stop_conditions",
+    "framework_lock_digest",
+    "files",
+    "snapshot_integrity",
+    "task_digest"
+  ],
+  "additionalProperties": false,
+  "dependentRequired": {
+    "baseline_id": [
+      "baseline_digest"
+    ],
+    "baseline_digest": [
+      "baseline_id"
+    ]
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "review_status": {
+            "const": "verified"
+          }
+        },
+        "required": [
+          "review_status"
+        ]
+      },
+      "then": {
+        "required": [
+          "baseline_id",
+          "baseline_digest"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-loom.example/schemas/v1/application.schema.json",
+  "title": "Design Loom application",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "application_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "design_repository_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "repositories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "design",
+              "service",
+              "ui",
+              "shared"
+            ]
+          },
+          "owner_role": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "role",
+          "owner_role"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "default_workflow": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "framework_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "extension_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?![A-Za-z]:)[^\\u0000]+$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "template_selections": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "provider": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "read",
+              "verify"
+            ]
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1
+          },
+          "setup_reference": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "mode",
+          "required",
+          "scopes",
+          "setup_reference"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "reviewer_roles": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        },
+        "minItems": 1,
+        "uniqueItems": true
+      }
+    },
+    "required_review_roles": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "max_artifacts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "max_metadata_bytes": {
+          "type": "integer",
+          "minimum": 1024
+        },
+        "max_source_bytes": {
+          "type": "integer",
+          "minimum": 1024
+        }
+      },
+      "required": [
+        "max_artifacts",
+        "max_metadata_bytes",
+        "max_source_bytes"
+      ],
+      "additionalProperties": false
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]*\\.[a-z0-9.-]+$"
+      },
+      "additionalProperties": true
+    },
+    "required_artifact_types": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "uniqueItems": true,
+      "default": []
+    }
+  },
+  "required": [
+    "schema_version",
+    "application_id",
+    "name",
+    "design_repository_id",
+    "repositories",
+    "default_workflow",
+    "framework_version",
+    "extension_paths",
+    "template_selections",
+    "capabilities",
+    "reviewer_roles",
+    "required_review_roles",
+    "limits"
+  ],
+  "additionalProperties": false
+}

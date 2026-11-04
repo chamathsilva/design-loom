@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "application_id": "sample-catalog",
+  "retrieved_at": "2026-11-03T12:00:00Z",
+  "id": "src-optional-notes",
+  "provider": "documentation",
+  "locator": "https://example.invalid/design-notes",
+  "revision": "unknown",
+  "state": "missing",
+  "notes": "Optional notes unavailable; requirements and engineering remain available."
+}

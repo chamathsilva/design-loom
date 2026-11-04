@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "id": "core.implementation-evidence",
+  "version": "0.1.0",
+  "artifact_type": "implementation-evidence",
+  "content_path": "implementation-evidence.md",
+  "sections": [
+    {
+      "key": "context-used",
+      "heading": "Context used",
+      "required": true,
+      "guidance": "Identify source and artifact revisions actually read, linked or unavailable, plus assumptions and context gaps."
+    },
+    {
+      "key": "task-and-baseline",
+      "heading": "Task and baseline",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "implementation-references",
+      "heading": "Implementation references",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "commands-actually-run",
+      "heading": "Commands actually run",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "results-and-evidence",
+      "heading": "Results and evidence",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "contract-verification",
+      "heading": "Contract verification",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "scope-deviations",
+      "heading": "Scope deviations",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "unresolved-findings",
+      "heading": "Unresolved findings",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    }
+  ]
+}

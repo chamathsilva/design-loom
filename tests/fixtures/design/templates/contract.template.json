@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "id": "core.contract",
+  "version": "0.1.0",
+  "artifact_type": "contract",
+  "content_path": "contract.md",
+  "sections": [
+    {
+      "key": "context-used",
+      "heading": "Context used",
+      "required": true,
+      "guidance": "Identify source and artifact revisions actually read, linked or unavailable, plus assumptions and context gaps."
+    },
+    {
+      "key": "purpose",
+      "heading": "Purpose",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "producer-and-consumers",
+      "heading": "Producer and consumers",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "contract",
+      "heading": "Contract",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "version-compatibility",
+      "heading": "Version compatibility",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "failure-behavior",
+      "heading": "Failure behavior",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "ownership",
+      "heading": "Ownership",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    }
+  ]
+}

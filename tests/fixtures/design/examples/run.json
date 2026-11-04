@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "command": "baseline verify",
+  "status": "blocked",
+  "run_id": "run-example-001",
+  "root": "/example/catalog-design",
+  "framework_version": "0.1.0",
+  "input_digest": "faf225589af7916c5f87056e2bd32959d8aa15b5a5a5245a19d4b0991c77057c",
+  "diagnostics": [
+    {
+      "code": "DL011",
+      "severity": "error",
+      "message": "Synthetic example has no verifiable provider approval.",
+      "path": "baseline.json",
+      "evidence": [
+        "All Git revisions and reviewer identities are synthetic."
+      ],
+      "remediation": "Use a real sandbox proposal PR and execute the approval adapter."
+    }
+  ],
+  "outputs": [],
+  "created_at": "2026-11-03T12:00:00Z"
+}

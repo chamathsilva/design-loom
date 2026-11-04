@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-loom.example/schemas/v1/task.schema.json",
+  "title": "Design Loom task",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "application_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "change_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "baseline_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "repository_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+        },
+        "starting_commit": {
+          "type": "string",
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+        }
+      },
+      "required": [
+        "repository_id",
+        "starting_commit"
+      ],
+      "additionalProperties": false
+    },
+    "requirement_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "artifact_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "allowed_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?![A-Za-z]:)[^\\u0000]+$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "excluded_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?![A-Za-z]:)[^\\u0000]+$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "dependency_tasks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "repository_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "argv": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1
+          },
+          "working_directory": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?![A-Za-z]:)[^\\u0000]+$"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "repository_id",
+          "argv",
+          "working_directory",
+          "required"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "stop_conditions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]*\\.[a-z0-9.-]+$"
+      },
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "application_id",
+    "change_id",
+    "title",
+    "target",
+    "requirement_ids",
+    "artifact_ids",
+    "allowed_paths",
+    "excluded_paths",
+    "dependency_tasks",
+    "checks",
+    "stop_conditions"
+  ],
+  "additionalProperties": false
+}

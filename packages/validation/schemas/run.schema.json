@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-loom.example/schemas/v1/run.schema.json",
+  "title": "Design Loom run",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "degraded"
+      ]
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "framework_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "input_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning",
+              "info"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "path": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 0
+          },
+          "remediation": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "message",
+          "path",
+          "evidence",
+          "remediation"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?![A-Za-z]:)[^\\u0000]+$"
+      },
+      "minItems": 0
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]*\\.[a-z0-9.-]+$"
+      },
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "command",
+    "status",
+    "run_id",
+    "root",
+    "framework_version",
+    "input_digest",
+    "diagnostics",
+    "outputs",
+    "created_at"
+  ],
+  "additionalProperties": false
+}

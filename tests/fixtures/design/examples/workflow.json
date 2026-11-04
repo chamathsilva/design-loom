@@ -1,0 +1,172 @@
+{
+  "schema_version": "1.0",
+  "id": "core.feature-design",
+  "version": "0.1.0",
+  "description": "Suggested activities for flexible engineering and late/batched QA with optional review.",
+  "steps": [
+    {
+      "id": "intake",
+      "skill": "dl-start-change",
+      "after": [],
+      "capabilities": [
+        "requirements.read"
+      ],
+      "required_outputs": [
+        "requirements"
+      ],
+      "blocking_rules": [
+        "DL001",
+        "DL003",
+        "DL004"
+      ],
+      "reviewer_roles": [],
+      "required_for_handoff": false
+    },
+    {
+      "id": "contracts",
+      "skill": "dl-design-change",
+      "after": [
+        "intake"
+      ],
+      "capabilities": [
+        "repository.read"
+      ],
+      "required_outputs": [
+        "contract"
+      ],
+      "blocking_rules": [
+        "DL001",
+        "DL003",
+        "DL004"
+      ],
+      "reviewer_roles": [],
+      "required_for_handoff": false
+    },
+    {
+      "id": "engineering",
+      "skill": "dl-design-change",
+      "after": [
+        "contracts"
+      ],
+      "capabilities": [
+        "repository.read"
+      ],
+      "required_outputs": [
+        "engineering-design"
+      ],
+      "blocking_rules": [
+        "DL001",
+        "DL003",
+        "DL004"
+      ],
+      "reviewer_roles": [],
+      "required_for_handoff": false
+    },
+    {
+      "id": "qa",
+      "skill": "dl-design-tests",
+      "after": [
+        "intake"
+      ],
+      "capabilities": [
+        "requirements.read"
+      ],
+      "required_outputs": [
+        "test-design"
+      ],
+      "blocking_rules": [
+        "DL001",
+        "DL003",
+        "DL004"
+      ],
+      "reviewer_roles": [],
+      "required_for_handoff": false
+    },
+    {
+      "id": "review",
+      "skill": "dl-review-change",
+      "after": [
+        "engineering",
+        "qa"
+      ],
+      "capabilities": [
+        "repository.read"
+      ],
+      "required_outputs": [
+        "review"
+      ],
+      "blocking_rules": [
+        "DL001",
+        "DL003",
+        "DL004"
+      ],
+      "reviewer_roles": [],
+      "required_for_handoff": false
+    },
+    {
+      "id": "baseline",
+      "skill": "dl-review-change",
+      "after": [
+        "review"
+      ],
+      "capabilities": [
+        "review.verify"
+      ],
+      "required_outputs": [
+        "baseline"
+      ],
+      "blocking_rules": [
+        "DL001",
+        "DL003",
+        "DL004",
+        "DL011",
+        "DL016"
+      ],
+      "reviewer_roles": [],
+      "required_for_handoff": false
+    },
+    {
+      "id": "handoff",
+      "skill": "dl-prepare-handoff",
+      "after": [
+        "baseline"
+      ],
+      "capabilities": [
+        "repository.read",
+        "review.verify"
+      ],
+      "required_outputs": [
+        "handoff"
+      ],
+      "blocking_rules": [
+        "DL001",
+        "DL003",
+        "DL004",
+        "DL011",
+        "DL016"
+      ],
+      "reviewer_roles": [],
+      "required_for_handoff": false
+    },
+    {
+      "id": "verify",
+      "skill": "dl-verify-implementation",
+      "after": [
+        "handoff"
+      ],
+      "capabilities": [
+        "repository.read"
+      ],
+      "required_outputs": [
+        "implementation-evidence"
+      ],
+      "blocking_rules": [
+        "DL001",
+        "DL003",
+        "DL004"
+      ],
+      "reviewer_roles": [],
+      "required_for_handoff": false
+    }
+  ]
+}

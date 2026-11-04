@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0",
+  "id": "DESIGN-002",
+  "application_id": "sample-catalog",
+  "change_id": "CHANGE-002",
+  "type": "engineering-design",
+  "title": "Public listing engineering design",
+  "state": "ready",
+  "workflow_step": "engineering",
+  "template_id": "core.engineering-design",
+  "template_version": "0.1.0",
+  "framework_version": "0.1.0",
+  "content": {
+    "path": "late-qa/engineering.md",
+    "sha256": "a7f9e65cee3f4cb056cb9a0eb680912efc79e75874ef183f2e326bf916307352"
+  },
+  "attachments": [],
+  "source_ids": [
+    "src-catalog-requirement"
+  ],
+  "requirement_ids": [
+    "REQ-001"
+  ],
+  "depends_on": [
+    "REQDOC-001",
+    "SHARED-STATUS-001"
+  ],
+  "owner_role": "engineering",
+  "applicability": "applicable",
+  "context": {
+    "schema_version": "1.0",
+    "references": [
+      {
+        "kind": "source",
+        "id": "src-catalog-requirement",
+        "state": "read",
+        "revision": "tutorial-v1",
+        "sha256": "63ce285f0d0a330b69118a5d650cceb60b6347ccf9d9d5dad229ca971d334e3a"
+      },
+      {
+        "kind": "artifact",
+        "id": "REQDOC-001",
+        "state": "read",
+        "sha256": "0470e06bd99b7a9be5352f476dd1b8719bf46d4b724649cb368a50866fd6e31e"
+      },
+      {
+        "kind": "artifact",
+        "id": "SHARED-STATUS-001",
+        "state": "read",
+        "sha256": "0e93c47c04dd587f659e68471de152169a46c0600e0208ccdfe4ce7ecffbbb15"
+      }
+    ],
+    "gaps": []
+  }
+}

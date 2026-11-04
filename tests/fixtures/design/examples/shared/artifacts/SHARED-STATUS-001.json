@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "id": "SHARED-STATUS-001",
+  "application_id": "sample-catalog",
+  "type": "contract",
+  "title": "Shared item status vocabulary",
+  "state": "draft",
+  "template_id": "core.contract",
+  "template_version": "0.1.0",
+  "framework_version": "0.1.0",
+  "content": {
+    "path": "shared/content/item-status.md",
+    "sha256": "302259e87c3525811819f82c23c4c7b8f026306f7dbbfc6315660783ae420d72"
+  },
+  "attachments": [],
+  "source_ids": [],
+  "requirement_ids": [],
+  "depends_on": [],
+  "owner_role": "engineering",
+  "applicability": "applicable",
+  "scope": "project"
+}

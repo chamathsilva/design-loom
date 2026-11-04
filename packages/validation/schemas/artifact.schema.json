@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-loom.example/schemas/v1/artifact.schema.json",
+  "title": "Design Loom artifact",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "application_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "change_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "type": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "in_review",
+        "superseded",
+        "ready"
+      ]
+    },
+    "workflow_step": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "template_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "template_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "framework_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "content": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?![A-Za-z]:)[^\\u0000]+$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?![A-Za-z]:)[^\\u0000]+$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "source_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "requirement_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "depends_on": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "owner_role": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "applicability": {
+      "type": "string",
+      "enum": [
+        "applicable",
+        "not_applicable"
+      ]
+    },
+    "applicability_reason": {
+      "type": "string"
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]*\\.[a-z0-9.-]+$"
+      },
+      "additionalProperties": true
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "change",
+        "project"
+      ],
+      "default": "change"
+    },
+    "context": {
+      "$ref": "https://design-loom.example/schemas/v1/context.schema.json"
+    },
+    "covered_change_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "application_id",
+    "type",
+    "title",
+    "state",
+    "template_id",
+    "template_version",
+    "framework_version",
+    "content",
+    "attachments",
+    "source_ids",
+    "requirement_ids",
+    "depends_on",
+    "owner_role",
+    "applicability"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "scope": {
+            "const": "project"
+          }
+        },
+        "required": [
+          "scope"
+        ]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "change_id"
+              ]
+            },
+            {
+              "required": [
+                "workflow_step"
+              ]
+            }
+          ]
+        }
+      },
+      "else": {
+        "required": [
+          "change_id",
+          "workflow_step"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "id": "QA-CAMPAIGN-001",
+  "application_id": "sample-catalog",
+  "title": "Combined catalog API test design",
+  "workflow_id": "core.feature-design",
+  "workflow_version": "0.1.0",
+  "requirement_ids": [
+    "REQ-001"
+  ],
+  "source_ids": [
+    "src-catalog-requirement"
+  ],
+  "target_repository_ids": [
+    "catalog-api"
+  ],
+  "scope": "Acceptance and integration scenarios covering CHANGE-001 and CHANGE-002.",
+  "exclusions": [
+    "Bulk archive",
+    "Restoration workflow"
+  ],
+  "owner_roles": [
+    "qa"
+  ]
+}

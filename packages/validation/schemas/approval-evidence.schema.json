@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-loom.example/schemas/v1/approval-evidence.schema.json",
+  "title": "Design Loom approval-evidence",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "baseline_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "baseline_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "provider": {
+      "const": "github"
+    },
+    "proposal_pr_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "proposal_head": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "merged_commit": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "manifest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "verified_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "result": {
+      "type": "string",
+      "enum": [
+        "verified",
+        "blocked",
+        "stale"
+      ]
+    },
+    "reviews": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "reviewer_login": {
+            "type": "string",
+            "minLength": 1
+          },
+          "review_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "commit": {
+            "type": "string",
+            "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "changes_requested",
+              "dismissed"
+            ]
+          },
+          "submitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "role",
+          "reviewer_login",
+          "review_id",
+          "commit",
+          "decision",
+          "submitted_at"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "head_sha": {
+            "type": "string",
+            "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+          },
+          "conclusion": {
+            "type": "string",
+            "minLength": 1
+          },
+          "issuer": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name",
+          "head_sha",
+          "conclusion",
+          "issuer"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning",
+              "info"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "path": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 0
+          },
+          "remediation": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "message",
+          "path",
+          "evidence",
+          "remediation"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]*\\.[a-z0-9.-]+$"
+      },
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "baseline_id",
+    "baseline_digest",
+    "provider",
+    "proposal_pr_url",
+    "proposal_head",
+    "merged_commit",
+    "manifest_sha256",
+    "verified_at",
+    "result",
+    "reviews",
+    "checks",
+    "diagnostics"
+  ],
+  "additionalProperties": false
+}

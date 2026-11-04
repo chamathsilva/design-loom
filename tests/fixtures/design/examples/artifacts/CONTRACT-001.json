@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "id": "CONTRACT-001",
+  "application_id": "sample-catalog",
+  "change_id": "CHANGE-001",
+  "type": "contract",
+  "title": "Contract",
+  "state": "in_review",
+  "workflow_step": "contracts",
+  "template_id": "core.contract",
+  "template_version": "0.1.0",
+  "framework_version": "0.1.0",
+  "content": {
+    "path": "content/contract.md",
+    "sha256": "68a7fd112424426e4f7623facdb8656f92bc74ad058480255c389a13dd9560cf"
+  },
+  "attachments": [],
+  "source_ids": [
+    "src-catalog-requirement"
+  ],
+  "requirement_ids": [
+    "REQ-001"
+  ],
+  "depends_on": [
+    "REQDOC-001",
+    "SHARED-STATUS-001"
+  ],
+  "owner_role": "engineering",
+  "applicability": "applicable"
+}

@@ -1,0 +1,178 @@
+{
+  "schema_version": "1.0",
+  "task_id": "TASK-EARLY-001",
+  "application_id": "sample-catalog",
+  "change_id": "CHANGE-001",
+  "design_repo_commit": "2222222222222222222222222222222222222222",
+  "target": {
+    "repository_id": "catalog-api",
+    "starting_commit": "3333333333333333333333333333333333333333"
+  },
+  "artifact_ids": [
+    "REQDOC-001",
+    "CONTRACT-001",
+    "DESIGN-001",
+    "SHARED-STATUS-001"
+  ],
+  "source_ids": [
+    "src-catalog-requirement"
+  ],
+  "requirement_ids": [
+    "REQ-001"
+  ],
+  "allowed_paths": [
+    "src/",
+    "tests/"
+  ],
+  "excluded_paths": [
+    "infra/"
+  ],
+  "dependency_tasks": [],
+  "checks": [
+    {
+      "id": "unit-tests",
+      "repository_id": "catalog-api",
+      "argv": [
+        "npm",
+        "test",
+        "--",
+        "--runInBand"
+      ],
+      "working_directory": ".",
+      "required": true
+    }
+  ],
+  "stop_conditions": [
+    "Required selected source cannot be resolved",
+    "Task scope or contract must change"
+  ],
+  "framework_lock_digest": "ee3a37dcf7e12e50dc021b663849e306c06e0c4dd4b7e3d9a9caa094b1cce60e",
+  "files": [
+    {
+      "repository_id": "catalog-design",
+      "path": "application.json",
+      "sha256": "224ce27c0e135b99201f2b37f0e0bb5e8cc24bb798d3e6811c84677639d1614b"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "artifacts/CONTRACT-001.json",
+      "sha256": "4a238995f1b7bc825160072d501194a700bce33cdcc23d18561d9bb023ce3cb5"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "artifacts/DESIGN-001.json",
+      "sha256": "16350de7edc3c5fafa876b84e19cd8f94676ec53df976d7f9cc3ca1ee047db20"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "artifacts/REQDOC-001.json",
+      "sha256": "cbd32e317a4bc62c34c6d5a07bdbf3f8b1a04b14c2f83647e3599ca2dc285bb3"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "change.json",
+      "sha256": "a2c51e12ae4ded3b845587c2fe1dd50fbea34efad1ea3df41231587f7ee19373"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "content/contract.md",
+      "sha256": "68a7fd112424426e4f7623facdb8656f92bc74ad058480255c389a13dd9560cf"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "content/engineering.md",
+      "sha256": "a2712ce7d1c74e9eb1cd7a92948adb098be13481296af98b845b231a6daf2f13"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "content/requirements.md",
+      "sha256": "f1291ad5f532f8ba803f4827c9fec2b867c9a7e4f79b55dae86a5974f26eb6d2"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "early-task.md",
+      "sha256": "c23543a25df74a176002936b9b0292a0ea7c52e3bab1c2e010da79f881c06309"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "framework-lock.json",
+      "sha256": "5363c1150af1eced3cd316f6a04df657655cf1e752f0581884a879e47077997b"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "shared/artifacts/SHARED-STATUS-001.json",
+      "sha256": "4f3b033867a97af76f8e4777d67eef8b83b1a2d6eaa097d456464469ccf803f6"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "shared/content/item-status.md",
+      "sha256": "302259e87c3525811819f82c23c4c7b8f026306f7dbbfc6315660783ae420d72"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "source.json",
+      "sha256": "4b811f873c0218ef983f7dcd5df705cb0754f40a01a725ce944e846866f2e877"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "sources/snapshots/catalog-requirement.md",
+      "sha256": "63ce285f0d0a330b69118a5d650cceb60b6347ccf9d9d5dad229ca971d334e3a"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "task-unreviewed.json",
+      "sha256": "5f17c9aeb7a7944e46cc04fc6ac934cbb1f7a6d34bc46cfc26b4cc8e09d0d7aa"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "workflow.json",
+      "sha256": "7d3d133c72c328306ca0bc730649e393bb52c616de0ed722492b1c99ce4609a5"
+    }
+  ],
+  "task_digest": "5f17c9aeb7a7944e46cc04fc6ac934cbb1f7a6d34bc46cfc26b4cc8e09d0d7aa",
+  "review_status": "not_requested",
+  "context": {
+    "schema_version": "1.0",
+    "references": [
+      {
+        "kind": "source",
+        "id": "src-catalog-requirement",
+        "state": "read",
+        "revision": "tutorial-v1",
+        "sha256": "63ce285f0d0a330b69118a5d650cceb60b6347ccf9d9d5dad229ca971d334e3a"
+      },
+      {
+        "kind": "artifact",
+        "id": "REQDOC-001",
+        "state": "read",
+        "sha256": "0470e06bd99b7a9be5352f476dd1b8719bf46d4b724649cb368a50866fd6e31e"
+      },
+      {
+        "kind": "artifact",
+        "id": "CONTRACT-001",
+        "state": "read",
+        "sha256": "0c4d67f22ec6315ad8731f94c471a3598ade1964bedf70f061a4dab287d0fde4"
+      },
+      {
+        "kind": "artifact",
+        "id": "DESIGN-001",
+        "state": "read",
+        "sha256": "7ac21e006f34b3467d2549220719a7d5a60a90fa85523265f68d5c52a913bdd4"
+      },
+      {
+        "kind": "artifact",
+        "id": "SHARED-STATUS-001",
+        "state": "read",
+        "sha256": "0e93c47c04dd587f659e68471de152169a46c0600e0208ccdfe4ce7ecffbbb15"
+      }
+    ],
+    "gaps": [
+      {
+        "id": "GAP-QA-PENDING",
+        "description": "QA design has not started at this snapshot.",
+        "impact": "Engineering work can proceed under empty review/output policy; test-design coverage is pending."
+      }
+    ]
+  },
+  "snapshot_integrity": "draft"
+}

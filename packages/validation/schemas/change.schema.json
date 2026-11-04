@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-loom.example/schemas/v1/change.schema.json",
+  "title": "Design Loom change",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "application_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workflow_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "workflow_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "requirement_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "source_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "target_repository_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "scope": {
+      "type": "string",
+      "minLength": 1
+    },
+    "exclusions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 0
+    },
+    "owner_roles": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]*\\.[a-z0-9.-]+$"
+      },
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "application_id",
+    "title",
+    "workflow_id",
+    "workflow_version",
+    "requirement_ids",
+    "source_ids",
+    "target_repository_ids",
+    "scope",
+    "exclusions",
+    "owner_roles"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "id": "REVIEW-001",
+  "application_id": "sample-catalog",
+  "change_id": "CHANGE-001",
+  "type": "review",
+  "title": "Review",
+  "state": "in_review",
+  "workflow_step": "review",
+  "template_id": "core.review",
+  "template_version": "0.1.0",
+  "framework_version": "0.1.0",
+  "content": {
+    "path": "content/review.md",
+    "sha256": "6c047b9c37dd4ef6e044717b568759d2083f46bd447dc446e35aecedcddeb4e4"
+  },
+  "attachments": [
+    {
+      "path": "findings.json",
+      "sha256": "19df0a63e12b401e92ad57be242f42efd0d09f15e1cf3ce21421f090ffbd3a1e"
+    }
+  ],
+  "source_ids": [
+    "src-catalog-requirement"
+  ],
+  "requirement_ids": [
+    "REQ-001"
+  ],
+  "depends_on": [
+    "DESIGN-001",
+    "QA-001",
+    "CONTRACT-001"
+  ],
+  "owner_role": "architecture",
+  "applicability": "applicable"
+}

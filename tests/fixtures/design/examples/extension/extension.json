@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "id": "example.database-review",
+  "version": "0.1.0",
+  "framework_range": ">=0.1.0 <0.2.0",
+  "requires": [],
+  "resources": [
+    {
+      "id": "example.database-design",
+      "kind": "template",
+      "path": "templates/database-design.md",
+      "artifact_type": "engineering-design",
+      "required_sections": [
+        "Migration",
+        "Backfill",
+        "Locking impact",
+        "Recovery"
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "EXDB001",
+      "kind": "required_section",
+      "artifact_type": "engineering-design",
+      "parameters": {
+        "template_id": "example.database-design",
+        "headings": [
+          "Migration",
+          "Backfill",
+          "Locking impact",
+          "Recovery"
+        ]
+      }
+    }
+  ]
+}

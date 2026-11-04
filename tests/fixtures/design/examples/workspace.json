@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "repositories": [
+    {
+      "id": "catalog-design",
+      "checkout_path": "/example/catalog-design"
+    },
+    {
+      "id": "catalog-api",
+      "checkout_path": "/example/catalog-api"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "id": "TASK-EARLY-001",
+  "application_id": "sample-catalog",
+  "change_id": "CHANGE-001",
+  "title": "Implement archive status",
+  "target": {
+    "repository_id": "catalog-api",
+    "starting_commit": "3333333333333333333333333333333333333333"
+  },
+  "requirement_ids": [
+    "REQ-001"
+  ],
+  "artifact_ids": [
+    "REQDOC-001",
+    "CONTRACT-001",
+    "DESIGN-001",
+    "SHARED-STATUS-001"
+  ],
+  "allowed_paths": [
+    "src/",
+    "tests/"
+  ],
+  "excluded_paths": [
+    "infra/"
+  ],
+  "dependency_tasks": [],
+  "checks": [
+    {
+      "id": "unit-tests",
+      "repository_id": "catalog-api",
+      "argv": [
+        "npm",
+        "test",
+        "--",
+        "--runInBand"
+      ],
+      "working_directory": ".",
+      "required": true
+    }
+  ],
+  "stop_conditions": [
+    "Required selected source cannot be resolved",
+    "Task scope or contract must change"
+  ]
+}

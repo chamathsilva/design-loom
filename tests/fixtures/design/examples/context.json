@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "references": [
+    {
+      "kind": "source",
+      "id": "src-catalog-requirement",
+      "state": "read",
+      "revision": "tutorial-v1",
+      "sha256": "63ce285f0d0a330b69118a5d650cceb60b6347ccf9d9d5dad229ca971d334e3a"
+    },
+    {
+      "kind": "artifact",
+      "id": "REQDOC-001",
+      "state": "read",
+      "sha256": "0470e06bd99b7a9be5352f476dd1b8719bf46d4b724649cb368a50866fd6e31e"
+    },
+    {
+      "kind": "artifact",
+      "id": "CONTRACT-001",
+      "state": "read",
+      "sha256": "0c4d67f22ec6315ad8731f94c471a3598ade1964bedf70f061a4dab287d0fde4"
+    },
+    {
+      "kind": "artifact",
+      "id": "SHARED-STATUS-001",
+      "state": "linked"
+    },
+    {
+      "kind": "source",
+      "id": "src-optional-notes",
+      "state": "unavailable"
+    }
+  ],
+  "gaps": [
+    {
+      "id": "GAP-NOTES",
+      "description": "Optional discussion notes could not be retrieved.",
+      "impact": "Continue from authoritative requirements and recorded engineering decisions, while showing this context gap."
+    }
+  ]
+}

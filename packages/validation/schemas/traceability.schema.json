@@ -1,0 +1,209 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-loom.example/schemas/v1/traceability.schema.json",
+  "title": "Design Loom traceability",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "change_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "acceptance_criteria": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "id",
+                "text"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          },
+          "source_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          }
+        },
+        "required": [
+          "id",
+          "acceptance_criteria",
+          "source_id"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "requirement_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          },
+          "criterion_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          },
+          "risk_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          },
+          "expected_result": {
+            "type": "string",
+            "minLength": 1
+          },
+          "execution": {
+            "type": "string",
+            "enum": [
+              "not_run",
+              "passed",
+              "failed"
+            ]
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 0
+          }
+        },
+        "required": [
+          "id",
+          "requirement_ids",
+          "criterion_ids",
+          "risk_ids",
+          "expected_result",
+          "execution",
+          "evidence_refs"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "design_links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "requirement_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "artifact_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "requirement_id",
+          "artifact_ids"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "requirement_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "owner_role": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          }
+        },
+        "required": [
+          "requirement_id",
+          "reason",
+          "owner_role"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]*\\.[a-z0-9.-]+$"
+      },
+      "additionalProperties": true
+    },
+    "covered_change_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "change_id",
+    "requirements",
+    "tests",
+    "design_links",
+    "gaps"
+  ],
+  "additionalProperties": false
+}
