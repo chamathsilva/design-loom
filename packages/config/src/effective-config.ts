@@ -10,7 +10,7 @@
  */
 
 import { type SchemaKind, validateAgainstSchema } from "@design-loom/validation";
-import { canonicalDigest, compareCodePoints, type JsonValue } from "./canonical-json.ts";
+import { CanonicalJsonError, canonicalDigest, compareCodePoints, type JsonValue } from "./canonical-json.ts";
 import { type Diagnostic, diagnostic, hasErrors, pointerPath, pointerToken, sortDiagnostics } from "./diagnostics.ts";
 import { caseFoldKey, normalizeRelativePath } from "./paths.ts";
 import { parseRange, parseVersion, satisfiesRange } from "./version-range.ts";
@@ -269,7 +269,13 @@ export function extensionDeclaredFiles(manifest: unknown): { files: string[]; pr
     try {
       const path = normalizeRelativePath(raw);
       if (path === "extension.json") problems.push(`${where} must not name the manifest itself`);
-      files.set(caseFoldKey(path), path);
+      const key = caseFoldKey(path);
+      const earlier = files.get(key);
+      // Two spellings of one name are one file on Windows and macOS but two on Linux.
+      if (earlier !== undefined && earlier !== path) {
+        problems.push(`${where}: ${JSON.stringify(path)} differs from ${JSON.stringify(earlier)} only in case`);
+      }
+      files.set(key, path);
     } catch (error) {
       problems.push(`${where}: ${(error as Error).message}`);
     }
@@ -418,6 +424,27 @@ function checkExtensionDescriptors(extension: ExtensionInput, out: Findings): vo
   }
 }
 
+/** The extensions supplied must be exactly the folders the application lists in extension_paths. */
+function checkExtensionPaths(input: ResolveInput, out: Findings): void {
+  const listed = (input.application.value as ApplicationView).extension_paths;
+  const supplied = input.extensions.map((extension) => extension.path);
+  const missing = listed.filter((path) => !supplied.includes(path));
+  const extra = supplied.filter((path) => !listed.includes(path));
+  const repeated = supplied.filter((path, index) => supplied.indexOf(path) !== index);
+  if (missing.length + extra.length + repeated.length === 0) return;
+  out.error(
+    "CONFIG_EXTENSION_PATHS_MISMATCH",
+    "the extensions supplied don't match the application's extension_paths",
+    pointerPath(input.application.origin, "/extension_paths"),
+    "Report this as a defect: the loader must load each listed folder exactly once, and nothing else.",
+    [
+      ...missing.map((path) => `not loaded: ${path}`),
+      ...extra.map((path) => `not listed: ${path}`),
+      ...repeated.map((path) => `loaded twice: ${path}`),
+    ],
+  );
+}
+
 /** Step 1: every input matches its contract. */
 function checkInputs(
   input: ResolveInput,
@@ -535,7 +562,10 @@ function compareExtensionLock(
   }
   const loaded = new Set<string>();
   for (const extension of extensions) {
-    const view = extension.manifest.value as Partial<ExtensionView>;
+    const value = extension.manifest.value;
+    // A malformed manifest is reported by the schema check; skip it here.
+    if (value === null || typeof value !== "object") continue;
+    const view = value as Partial<ExtensionView>;
     if (typeof view.id !== "string") continue;
     loaded.add(caseFoldKey(view.id));
     const tuple = locked.get(caseFoldKey(view.id));
@@ -1079,6 +1109,7 @@ export function resolveEffectiveConfig(input: ResolveInput): ResolveResult {
   });
 
   const { manifest, applicationValid, lockValid } = checkInputs(input, out);
+  if (applicationValid) checkExtensionPaths(input, out);
   const lock = lockValid && manifest ? compareLock(input, manifest.framework_version, out) : null;
   if (out.failed || !manifest || !applicationValid || !lockValid) return fail(lock);
 
@@ -1112,5 +1143,18 @@ export function resolveEffectiveConfig(input: ResolveInput): ResolveResult {
     }
     return fail(lock);
   }
-  return { envelope: deepFreeze(envelope), digest: effectiveConfigDigest(envelope), lock, diagnostics: out.all() };
+  let digest: string;
+  try {
+    digest = effectiveConfigDigest(envelope);
+  } catch (error) {
+    if (!(error instanceof CanonicalJsonError)) throw error;
+    out.error(
+      "CONFIG_NOT_CANONICAL",
+      `the configuration can't be hashed with canonical-json-v1: ${error.message}`,
+      input.application.origin,
+      "Use integers, strings, booleans, null, arrays and objects only; write fractions as strings.",
+    );
+    return fail(lock);
+  }
+  return { envelope: deepFreeze(envelope), digest, lock, diagnostics: out.all() };
 }

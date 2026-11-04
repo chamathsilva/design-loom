@@ -82,8 +82,15 @@ function withValue(document: SourceDocument, edit: (value: Record<string, unknow
   return { ...document, value };
 }
 
+/** Resolver input. Supplied extensions are listed in the profile's extension_paths unless the test passes its own profile. */
 function input(overrides: Partial<ResolveInput> = {}): ResolveInput {
-  return { release: RELEASE, application: application(), lock: matchingLock(), extensions: [], ...overrides };
+  const extensions = overrides.extensions ?? [];
+  const app =
+    overrides.application ??
+    withValue(application(), (value) => {
+      value.extension_paths = [...new Set(extensions.map((extension) => extension.path))];
+    });
+  return { release: RELEASE, lock: matchingLock(), ...overrides, application: app, extensions };
 }
 
 /** The design fixture's inputs. Its lock pins synthetic digests (all a's and b's). */
@@ -113,7 +120,7 @@ function exampleExtension(edit?: (manifest: Record<string, unknown>) => void): {
   const resourcesSha256 = resourceInventoryDigest(inventory);
   const value = manifest.value as { id: string; version: string };
   return {
-    extension: { path: "extensions/database-review", manifest, resourcesSha256, descriptors: new Map() },
+    extension: { path: `extensions/${value.id}`, manifest, resourcesSha256, descriptors: new Map() },
     tuple: { id: value.id, version: value.version, sha256: resourcesSha256 },
   };
 }
@@ -261,6 +268,17 @@ describe("effective configuration: application and lock versions", () => {
     assert.equal(result.lock?.framework_version, "mismatch");
     assert.equal(result.lock?.ok, false);
     assert.deepEqual(codes(result.diagnostics), ["CONFIG_APP_FRAMEWORK_MISMATCH"]);
+  });
+});
+
+describe("effective configuration: values canonical JSON can't hash", () => {
+  test("a fractional extension setting is a diagnostic, not a crash", () => {
+    const app = withValue(application(), (value) => {
+      value.extensions = { "acme.tuning": { threshold: 0.5 } };
+    });
+    const result = resolveEffectiveConfig(input({ application: app }));
+    assert.equal(result.envelope, null);
+    assert.deepEqual(codes(result.diagnostics), ["CONFIG_NOT_CANONICAL"]);
   });
 });
 
@@ -427,7 +445,7 @@ describe("effective configuration: extensions", () => {
   test("a locked extension resolves; its Markdown template becomes selectable", () => {
     const { extension, tuple } = exampleExtension();
     const app = withValue(application(), (value) => {
-      value.extension_paths = ["extensions/database-review"];
+      value.extension_paths = ["extensions/example.database-review"];
       value.template_selections = { "engineering-design": "example.database-design" };
     });
     const result = resolveEffectiveConfig(
@@ -520,6 +538,29 @@ describe("effective configuration: extensions", () => {
     });
   }
 
+  test("a manifest that isn't an object is a schema diagnostic, not a crash", () => {
+    const { extension, tuple } = exampleExtension();
+    const broken = { ...extension, manifest: { ...extension.manifest, value: null } };
+    const result = resolveEffectiveConfig(input({ lock: matchingLock([tuple]), extensions: [broken] }));
+    assert.equal(result.envelope, null);
+    assert.ok(codes(result.diagnostics).includes("CONFIG_SCHEMA_INVALID"));
+  });
+
+  test("supplied extensions must be exactly the profile's extension_paths", () => {
+    const { extension, tuple } = exampleExtension();
+    const listedNotLoaded = withValue(application(), (value) => {
+      value.extension_paths = ["extensions/missing"];
+    });
+    const missing = resolveEffectiveConfig(input({ application: listedNotLoaded, lock: matchingLock() }));
+    assert.deepEqual(codes(missing.diagnostics), ["CONFIG_EXTENSION_PATHS_MISMATCH"]);
+    assert.deepEqual(missing.diagnostics[0]?.evidence, ["not loaded: extensions/missing"]);
+    const loadedNotListed = resolveEffectiveConfig(
+      input({ application: application(), lock: matchingLock([tuple]), extensions: [extension] }),
+    );
+    assert.equal(loadedNotListed.envelope, null);
+    assert.ok(codes(loadedNotListed.diagnostics).includes("CONFIG_EXTENSION_PATHS_MISMATCH"));
+  });
+
   test("two extensions with the same ID ignoring case are rejected", () => {
     const first = exampleExtension();
     const second = exampleExtension((m) => Object.assign(m, { id: "Example.Database-Review" }));
@@ -605,6 +646,14 @@ describe("loader helpers", () => {
       parameters: { payload_pointer: "/payload", schema_path: "schemas\\payload.json" },
     });
     assert.deepEqual(extensionDeclaredFiles(manifest).files, ["schemas/payload.json", "templates/database-design.md"]);
+  });
+
+  test("two declared files that differ only in case are a problem", () => {
+    const manifest = JSON.parse(readFileSync(join(EXAMPLES, "extension", "extension.json"), "utf8"));
+    manifest.resources.push({ id: "example.upper", kind: "instructions", path: "templates/Database-Design.md" });
+    const { problems } = extensionDeclaredFiles(manifest);
+    assert.equal(problems.length, 1);
+    assert.match(problems[0] ?? "", /only in case/);
   });
 
   test("extension files must stay inside the extension folder", () => {
