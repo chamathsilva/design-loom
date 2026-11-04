@@ -29,7 +29,7 @@ import {
   sortDiagnostics,
   templateContentPath,
 } from "@design-loom/config";
-import { type SafeFileSystem, SafeFsError } from "./safe-fs.ts";
+import { osErrorCode, type SafeFileSystem, SafeFsError } from "./safe-fs.ts";
 
 export const APPLICATION_PATH = ".design-loom/app.json";
 export const LOCK_PATH = ".design-loom/framework.lock.json";
@@ -69,8 +69,8 @@ async function readFileAt(
   } catch (error) {
     if (!(error instanceof SafeFsError)) {
       // OS errors such as EACCES name absolute local paths; report the code and the portable name only.
-      const code = (error as NodeJS.ErrnoException).code;
-      if (typeof code !== "string" || !/^E[A-Z]+$/.test(code)) throw error;
+      const code = osErrorCode(error);
+      if (code === null) throw error;
       throw new LoadError(
         "CONFIG_FILE_UNREADABLE",
         shownAs,

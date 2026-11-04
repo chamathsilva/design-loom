@@ -100,6 +100,12 @@ async function editJson(path: string, edit: (value: Record<string, unknown>) => 
 
 const codes = (envelope: ResultEnvelope): string[] => envelope.diagnostics.map((entry) => entry.code);
 
+/** True when any diagnostic string contains the path, checked on the values, not on escaped JSON. */
+const diagnosticsMention = (envelope: ResultEnvelope, path: string): boolean =>
+  envelope.diagnostics.some((entry) =>
+    [entry.message, entry.path, entry.remediation, ...entry.evidence].some((text) => text.includes(path)),
+  );
+
 describe("config resolve", () => {
   test("resolves the application and reports the effective config digest", async () => {
     const root = await application();
@@ -260,7 +266,7 @@ describe("invocation", () => {
       assert.deepEqual(codes(envelope), ["CLI_INVALID_ROOT"]);
       // Only the envelope's root field may carry the given path, never a diagnostic.
       const path = args[2];
-      if (path !== undefined) assert.ok(!JSON.stringify(envelope.diagnostics).includes(path), path);
+      if (path !== undefined) assert.ok(!diagnosticsMention(envelope, path), path);
     }
   });
 
@@ -439,7 +445,7 @@ describe("doctor", () => {
     const invalid = envelope.diagnostics.find((entry) => entry.code === "DOCTOR_WORKSPACE_INVALID");
     assert.equal(invalid?.path, workspacePath);
     assert.equal(invalid?.message, `${workspacePath} can't be read: EACCES`);
-    assert.ok(!JSON.stringify(envelope.diagnostics).includes(root));
+    assert.ok(!diagnosticsMention(envelope, root));
   });
 
   test("an unreadable capability folder is unavailable, not a crash", async (t) => {
@@ -456,7 +462,7 @@ describe("doctor", () => {
       assert.ok(!codes(envelope).includes("CLI_INTERNAL_ERROR"));
       const result = envelope.result as { capabilities: { id: string; state: string }[] };
       assert.equal(result.capabilities.find((entry) => entry.id === "requirements.read")?.state, "unavailable");
-      assert.ok(!JSON.stringify(envelope.diagnostics).includes(snapshots));
+      assert.ok(!diagnosticsMention(envelope, snapshots));
     } finally {
       await chmod(join(root, "sources"), 0o755);
     }

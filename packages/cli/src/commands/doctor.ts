@@ -15,7 +15,7 @@
 
 import { isAbsolute } from "node:path";
 import { type Diagnostic, diagnostic, normalizeRelativePath, parseJson, sha256Hex } from "@design-loom/config";
-import { SafeFileSystem, SafeFsError } from "@design-loom/integrations";
+import { osErrorCode, SafeFileSystem, SafeFsError } from "@design-loom/integrations";
 import { validateAgainstSchema } from "@design-loom/validation";
 import { type CliContext, openRoot, resolveConfiguration } from "../context.ts";
 import { EXIT, type ExitCode, type RunStatus, worstExit } from "../envelope.ts";
@@ -52,13 +52,9 @@ interface Workflow {
 
 type WorkspaceMap = ReadonlyMap<string, string>;
 
-/** Whether a repository-relative path exists inside the root. */
-/** True for an OS error such as EACCES or ELOOP: something the user can fix, not a defect. */
-function isOsError(error: unknown): boolean {
-  const code = (error as NodeJS.ErrnoException | undefined)?.code;
-  return typeof code === "string" && /^E[A-Z]+$/.test(code);
-}
+const isOsError = (error: unknown): boolean => osErrorCode(error) !== null;
 
+/** Whether a repository-relative path exists inside the root. */
 async function pathState(app: SafeFileSystem, path: string): Promise<CapabilityState> {
   try {
     await app.listDirectory(path);
@@ -158,8 +154,8 @@ async function readWorkspace(
   } catch (error) {
     if (error instanceof SafeFsError && error.code === "not-found") return { state: "absent", map: null };
     // A folder, an escaping symlink or an unreadable file: the user can fix it, so it's invalid input.
-    const code = (error as NodeJS.ErrnoException).code;
-    if (!(error instanceof SafeFsError) && !(typeof code === "string" && /^E[A-Z]+$/.test(code))) throw error;
+    const code = osErrorCode(error);
+    if (!(error instanceof SafeFsError) && code === null) throw error;
     const reason = error instanceof SafeFsError ? error.message : code;
     return invalidWorkspace(diagnostics, `${WORKSPACE_PATH} can't be read: ${reason}`);
   }

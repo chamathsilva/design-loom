@@ -14,6 +14,7 @@ export {
 } from "./config-loader.ts";
 export {
   type DirectoryEntry,
+  osErrorCode,
   SafeFileSystem,
   SafeFsError,
   type SafeFsErrorCode,
