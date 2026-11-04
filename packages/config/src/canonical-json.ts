@@ -1,7 +1,8 @@
 /**
  * canonical-json-v1: the framework's byte-exact JSON form for hashing (design doc 09, "Hashing").
  *
- * - Parsing rejects duplicate keys, invalid Unicode and anything that isn't strict JSON.
+ * - Parsing rejects duplicate keys, invalid Unicode, anything that isn't strict JSON, and numbers
+ *   that aren't exact safe integers (no silent rounding: "1.0000000000000000001" is rejected).
  * - Object keys are sorted by Unicode scalar value (code point), never by UTF-16 code unit or locale.
  * - Output has no insignificant whitespace, no BOM and no final newline, encoded as UTF-8.
  * - Only `"` and `\` plus control characters are escaped; everything else is emitted literally.
@@ -122,11 +123,32 @@ export function parseJson(text: string): JsonValue {
     return out;
   };
 
+  /**
+   * Parses a number literal exactly, without going through a lossy float. Only exact safe
+   * integers are accepted: "1.0", "1e2" and "-0.0" denote integers, while "1.5", "1e400" and
+   * "1.0000000000000000001" are rejected instead of being rounded.
+   */
   const parseNumber = (): number => {
-    const match = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(text.slice(pos));
+    const match = /^(-?)(0|[1-9]\d*)(?:\.(\d+))?(?:[eE]([+-]?\d+))?/.exec(text.slice(pos));
     if (match === null) return fail("invalid number");
-    pos += match[0].length;
-    return Number(match[0]);
+    const [literal, sign = "", whole = "", fraction = "", exponentText = "0"] = match;
+    pos += literal.length;
+
+    const digits = (whole + fraction).replace(/^0+/, "");
+    if (digits === "") return 0;
+    const exponent = Number(exponentText);
+    const significant = digits.replace(/0+$/, "");
+    const trailingZeros = digits.length - significant.length;
+    // Power of ten applied to `significant`, which has no trailing zeros.
+    const scale = exponent - fraction.length + trailingZeros;
+    if (!Number.isSafeInteger(scale) || scale < 0) return fail(`number is not an integer: ${literal}`);
+    if (significant.length + scale > 16) return fail(`number outside the safe integer range: ${literal}`);
+
+    const magnitude = BigInt(significant) * 10n ** BigInt(scale);
+    if (magnitude > BigInt(Number.MAX_SAFE_INTEGER)) {
+      return fail(`number outside the safe integer range: ${literal}`);
+    }
+    return sign === "-" ? -Number(magnitude) : Number(magnitude);
   };
 
   const parseValue = (depth: number): JsonValue => {

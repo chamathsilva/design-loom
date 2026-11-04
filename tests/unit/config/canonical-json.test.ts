@@ -138,12 +138,43 @@ describe("strict parsing", () => {
     ["NaN literal", "NaN"],
     ["empty input", ""],
     ["unterminated string", '"abc'],
+    ["raw unpaired surrogate in the text", '"a\ud800b"'],
+    ["fractional number", "1.5"],
+    ["fraction too small for a float", "1.0000000000000000001"],
+    ["huge exponent", "1e400"],
+    ["tiny fraction by exponent", "5e-1"],
+    ["integer above the safe range", "9007199254740992"],
+    ["integer far above the safe range", "9007199254740993"],
+    ["integer below the safe range", "-9007199254740992"],
+    ["lone minus", "-"],
+    ["missing fraction digits", "1."],
+    ["missing integer digits", ".5"],
+    ["plus sign", "+1"],
   ];
   for (const [name, text] of invalid) {
     test(`rejects ${name}`, () => {
       assert.throws(() => parseJson(text), CanonicalJsonError);
     });
   }
+
+  test("accepts number literals that denote exact safe integers", () => {
+    const cases: Array<[string, number]> = [
+      ["0", 0],
+      ["-0", 0],
+      ["-0.0", 0],
+      ["1.0", 1],
+      ["1e2", 100],
+      ["10e-1", 1],
+      ["100E-2", 1],
+      ["9007199254740991", 9007199254740991],
+      ["-9007199254740991", -9007199254740991],
+      ["9.007199254740991e15", 9007199254740991],
+      ["0e999999", 0],
+    ];
+    for (const [literal, expected] of cases) {
+      assert.equal(parseJson(literal), expected, literal);
+    }
+  });
 
   test("combines escaped surrogate pairs into one code point", () => {
     assert.equal(parseJson('"\\ud83d\\ude00"'), "\u{1f600}");
