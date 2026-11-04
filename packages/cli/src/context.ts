@@ -93,7 +93,7 @@ export function frameworkVersionOf(resolution: Resolution | null): string {
   return typeof value?.framework_version === "string" ? value.framework_version : "0.0.0";
 }
 
-/** Digests a command read, for the envelope's input_digest. */
+/** Configuration input digests for the envelope's input_digest. */
 export function inputDigests(resolution: Resolution | null): { origin: string; sha256: string }[] {
   const input = resolution?.input;
   if (!input) return [];

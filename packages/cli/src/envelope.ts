@@ -49,7 +49,10 @@ export interface ResultEnvelope {
    */
   root: string;
   framework_version: string;
-  /** SHA-256 over the command, its options and the digests of the inputs it read. */
+  /**
+   * SHA-256 over the command, its options, and configuration input digests, including the workspace
+   * map when doctor reads it. Live readiness observations such as filesystem and Git probes are excluded.
+   */
   input_digest: string;
   diagnostics: Diagnostic[];
   /** Files the command wrote, relative to the root. */
@@ -74,7 +77,7 @@ export interface EnvelopeParts {
   frameworkVersion: string;
   /** Command options that change the result, without the root path. */
   options: Record<string, string | boolean | null>;
-  /** Digests of what the command read, for example the effective-config provenance. */
+  /** Input digests included in the run fingerprint, such as the effective-config provenance. */
   inputs: ReadonlyArray<{ origin: string; sha256: string }>;
   diagnostics: readonly Diagnostic[];
   outputs?: readonly string[];

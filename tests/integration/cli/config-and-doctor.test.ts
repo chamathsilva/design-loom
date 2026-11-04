@@ -306,6 +306,47 @@ describe("doctor", () => {
     assert.ok(unavailable?.evidence.includes("catalog-api: not mapped in .design-loom/workspace.local.json"));
   });
 
+  test("an existing folder without .git and a missing checkout both block a required repository", async () => {
+    const root = await application({ map: false });
+    const checkout = join(scratch, "mapped-api");
+    await writeFile(
+      join(root, ".design-loom", "workspace.local.json"),
+      json({ schema_version: "1.0", repositories: [{ id: "catalog-api", checkout_path: checkout }] }),
+    );
+    await mkdir(checkout);
+    const notGit = await run(["doctor", "--root", root]);
+    assert.equal(notGit.code, EXIT.unavailable);
+    assert.equal(notGit.envelope.status, "blocked");
+    const notGitDiagnostic = notGit.envelope.diagnostics.find(
+      (entry) => entry.code === "DOCTOR_CAPABILITY_UNAVAILABLE",
+    );
+    assert.ok(notGitDiagnostic?.evidence.includes("catalog-api: mapped folder is not a Git checkout"));
+
+    await rm(checkout, { recursive: true });
+    const missing = await run(["doctor", "--root", root]);
+    assert.equal(missing.code, EXIT.unavailable);
+    assert.equal(missing.envelope.status, "blocked");
+    const missingDiagnostic = missing.envelope.diagnostics.find(
+      (entry) => entry.code === "DOCTOR_CAPABILITY_UNAVAILABLE",
+    );
+    assert.ok(missingDiagnostic?.evidence.includes("catalog-api: mapped checkout folder is missing"));
+    assert.equal(notGit.envelope.input_digest, missing.envelope.input_digest);
+  });
+
+  test("changing the workspace map changes the input digest", async () => {
+    const root = await application();
+    const ready = await run(["doctor", "--root", root]);
+    assert.equal(ready.code, EXIT.ok);
+    await editJson(join(root, ".design-loom", "workspace.local.json"), (value) => {
+      const [repository] = value.repositories as { checkout_path: string }[];
+      assert.ok(repository);
+      repository.checkout_path = join(scratch, "missing-api");
+    });
+    const blocked = await run(["doctor", "--root", root]);
+    assert.equal(blocked.code, EXIT.unavailable);
+    assert.notEqual(ready.envelope.input_digest, blocked.envelope.input_digest);
+  });
+
   test("a missing optional capability only degrades the run", async () => {
     const root = await application();
     await rm(join(root, "sources"), { recursive: true });
@@ -350,6 +391,25 @@ describe("doctor", () => {
     assert.equal(code, EXIT.invalid);
     assert.ok(codes(envelope).includes("DOCTOR_WORKSPACE_INVALID"));
     assert.ok(!codes(envelope).includes("CLI_INTERNAL_ERROR"));
+  });
+
+  test("workspace permission errors report the errno without exposing the local path", async ({ mock }) => {
+    const root = await application();
+    const workspacePath = ".design-loom/workspace.local.json";
+    const readBytes = SafeFileSystem.prototype.readBytes;
+    mock.method(SafeFileSystem.prototype, "readBytes", async function (this: SafeFileSystem, path: string) {
+      if (path === workspacePath) {
+        throw Object.assign(new Error(`EACCES: permission denied, open '${join(root, path)}'`), { code: "EACCES" });
+      }
+      return readBytes.call(this, path);
+    });
+    const { code, envelope, stderr } = await run(["doctor", "--root", root]);
+    assert.equal(code, EXIT.invalid);
+    assert.equal(stderr, "");
+    const invalid = envelope.diagnostics.find((entry) => entry.code === "DOCTOR_WORKSPACE_INVALID");
+    assert.equal(invalid?.path, workspacePath);
+    assert.equal(invalid?.message, `${workspacePath} can't be read: EACCES`);
+    assert.ok(!JSON.stringify(envelope.diagnostics).includes(root));
   });
 
   test("an old Node.js runtime blocks", async () => {

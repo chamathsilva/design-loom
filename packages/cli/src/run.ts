@@ -117,7 +117,7 @@ export async function runCli(argv: readonly string[], io: CliIo, context: CliCon
     root: options.root ?? "",
     frameworkVersion: frameworkVersionOf(outcome.resolution),
     options: { workflow: options.workflow ?? null },
-    inputs: inputDigests(outcome.resolution),
+    inputs: [...inputDigests(outcome.resolution), ...(outcome.additionalInputs ?? [])],
     diagnostics: outcome.diagnostics,
     result: outcome.result,
     now: context.now(),

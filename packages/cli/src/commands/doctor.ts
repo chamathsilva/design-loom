@@ -14,7 +14,7 @@
  */
 
 import { isAbsolute } from "node:path";
-import { type Diagnostic, diagnostic, normalizeRelativePath, parseJson } from "@design-loom/config";
+import { type Diagnostic, diagnostic, normalizeRelativePath, parseJson, sha256Hex } from "@design-loom/config";
 import { SafeFileSystem, SafeFsError } from "@design-loom/integrations";
 import { validateAgainstSchema } from "@design-loom/validation";
 import { type CliContext, openRoot, resolveConfiguration } from "../context.ts";
@@ -103,6 +103,7 @@ async function probe(
           evidence.push(`${repository}: not mapped in ${WORKSPACE_PATH}`);
         } else {
           try {
+            // The local map can point outside the application root. This probe only lists the mapped checkout's root.
             present = await hasGit(await SafeFileSystem.open(checkout));
             evidence.push(`${repository}: ${present ? "checkout found" : "mapped folder is not a Git checkout"}`);
           } catch {
@@ -139,7 +140,7 @@ function invalidWorkspace(
 async function readWorkspace(
   app: SafeFileSystem,
   diagnostics: Diagnostic[],
-): Promise<{ state: "absent" | "valid" | "invalid"; map: WorkspaceMap | null }> {
+): Promise<{ state: "absent" | "valid" | "invalid"; map: WorkspaceMap | null; sha256?: string }> {
   let bytes: Uint8Array;
   try {
     bytes = await app.readBytes(WORKSPACE_PATH);
@@ -148,10 +149,14 @@ async function readWorkspace(
     // A folder, an escaping symlink or an unreadable file: the user can fix it, so it's invalid input.
     const code = (error as NodeJS.ErrnoException).code;
     if (!(error instanceof SafeFsError) && !(typeof code === "string" && /^E[A-Z]+$/.test(code))) throw error;
-    return invalidWorkspace(diagnostics, `${WORKSPACE_PATH} can't be read: ${(error as Error).message}`);
+    const reason = error instanceof SafeFsError ? error.message : code;
+    return invalidWorkspace(diagnostics, `${WORKSPACE_PATH} can't be read: ${reason}`);
   }
-  const invalid = (message: string, path = WORKSPACE_PATH): { state: "invalid"; map: null } =>
-    invalidWorkspace(diagnostics, message, path);
+  const sha256 = sha256Hex(bytes);
+  const invalid = (message: string, path = WORKSPACE_PATH) => ({
+    ...invalidWorkspace(diagnostics, message, path),
+    sha256,
+  });
   let value: unknown;
   try {
     value = parseJson(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
@@ -174,7 +179,7 @@ async function readWorkspace(
       return invalid(`repository ${entry.id} is mapped twice`, `${WORKSPACE_PATH}#/repositories/${index}/id`);
     map.set(entry.id, entry.checkout_path);
   }
-  return { state: "valid", map };
+  return { state: "valid", map, sha256 };
 }
 
 export async function doctor(
@@ -293,6 +298,7 @@ export async function doctor(
     status,
     exitCode,
     resolution,
+    additionalInputs: workspace.sha256 ? [{ origin: WORKSPACE_PATH, sha256: workspace.sha256 }] : [],
     diagnostics,
     result: {
       runtime: { node: context.nodeVersion, supported: runtimeSupported },

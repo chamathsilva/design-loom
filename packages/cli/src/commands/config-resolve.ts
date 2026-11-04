@@ -5,12 +5,13 @@
  */
 
 import { type CliContext, openRoot, type Resolution, resolveConfiguration } from "../context.ts";
-import { EXIT, type ExitCode, type RunStatus } from "../envelope.ts";
+import { type EnvelopeParts, EXIT, type ExitCode, type RunStatus } from "../envelope.ts";
 
 export interface CommandOutcome {
   status: RunStatus;
   exitCode: ExitCode;
   resolution: Resolution | null;
+  additionalInputs?: EnvelopeParts["inputs"];
   diagnostics: Resolution["diagnostics"];
   result: unknown;
 }
