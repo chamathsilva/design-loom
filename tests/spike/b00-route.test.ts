@@ -106,6 +106,35 @@ describe("route A: direct script", () => {
     assert.deepEqual(await readdir(outside), []);
   });
 
+  test("write refuses a runs folder redirected elsewhere inside the checkout", async (t) => {
+    const checkout = join(designRoot, "redirected-checkout");
+    await mkdir(join(checkout, ".design-loom"), { recursive: true });
+    await mkdir(join(checkout, "docs"));
+    try {
+      await symlink(
+        join(checkout, "docs"),
+        join(checkout, ".design-loom", "runs"),
+        process.platform === "win32" ? "junction" : "dir",
+      );
+    } catch {
+      t.skip("symlinks need extra privileges on this OS");
+      return;
+    }
+    await assert.rejects(
+      run(process.execPath, [CLI, "write", "--root", checkout], { env: ENV }),
+      (error: { code?: number }) => error.code === 2,
+    );
+    assert.deepEqual(await readdir(join(checkout, "docs")), []);
+  });
+
+  test("the credential probe is read-only and never reports validity", async () => {
+    const { stdout } = await run(process.execPath, [CLI, "diagnose", "--root", designRoot], { env: ENV });
+    const tools = JSON.parse(stdout).tools;
+    assert.equal(tools.ghCredentialValidity, "unverified");
+    assert.ok([true, false, null].includes(tools.ghCredentialStored));
+    assert.equal("ghAuthStatusExitCode" in tools, false);
+  });
+
   test("never prints token values", async () => {
     const secret = "ghp_THIS_MUST_NOT_APPEAR_1234567890";
     const { stdout } = await run(process.execPath, [CLI, "diagnose", "--root", designRoot], {

@@ -20,14 +20,22 @@ function toolVersion(command, args) {
   }
 }
 
-/** Exit code of `gh auth status` for the active account only: 0 means logged in. Output is discarded. */
-function ghAuthExitCode() {
+/**
+ * Whether `gh` has a stored credential for github.com. Read-only: `gh auth status` can refresh or
+ * even remove a stored credential, so this asks `gh auth token` instead, which only reads it. The
+ * output is checked for being non-empty and then dropped; the value is never kept or printed.
+ * Whether the credential is still valid needs the network and is reported as unverified.
+ */
+function ghCredentialStored() {
   try {
-    const result = spawnSync("gh", ["auth", "status", "--active", "--hostname", "github.com"], {
+    const result = spawnSync("gh", ["auth", "token", "--hostname", "github.com"], {
+      encoding: "utf8",
       timeout: 10_000,
       shell: false,
+      env: { ...process.env, GH_PROMPT_DISABLED: "1", GH_NO_UPDATE_NOTIFIER: "1" },
     });
-    return result.error ? null : result.status;
+    if (result.error) return null;
+    return result.status === 0 && result.stdout.trim().length > 0;
   } catch {
     return null;
   }
@@ -120,7 +128,8 @@ async function diagnose({ root, route }) {
     tools: {
       git: toolVersion("git", ["--version"]),
       gh: toolVersion("gh", ["--version"]),
-      ghAuthStatusExitCode: ghAuthExitCode(),
+      ghCredentialStored: ghCredentialStored(),
+      ghCredentialValidity: "unverified",
     },
     credentials: {
       GH_TOKEN_present: Boolean(process.env.GH_TOKEN),
@@ -153,17 +162,18 @@ function write({ root, route }) {
     throw refuse(`root is not an existing folder: ${absoluteRoot}`);
   }
   const realRoot = fs.realpathSync(absoluteRoot);
-  // Create .design-loom/runs one level at a time, checking each folder before using it, so a
-  // symlinked .design-loom or runs folder can't send the report (or a new folder) outside.
+  // Create .design-loom/runs one level at a time. Each level must be a real folder at exactly its
+  // expected place: a symlink, even to another folder inside the checkout, could send the report
+  // out of the ignored runs folder (into docs/, say) while still "succeeding".
   let realRuns = realRoot;
   for (const segment of [".design-loom", "runs"]) {
     const next = path.join(realRuns, segment);
     if (!fs.existsSync(next)) fs.mkdirSync(next);
-    realRuns = fs.realpathSync(next);
-    const fromRoot = path.relative(realRoot, realRuns);
-    if (fromRoot.startsWith("..") || path.isAbsolute(fromRoot)) {
-      throw refuse(`.design-loom/runs resolves outside the checkout: ${realRuns}`);
+    const stat = fs.lstatSync(next);
+    if (stat.isSymbolicLink() || !stat.isDirectory() || fs.realpathSync(next) !== next) {
+      throw refuse(`${path.relative(realRoot, next)} must be a real folder in the checkout, not a link`);
     }
+    realRuns = next;
   }
   const name = `b00-spike-${route}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
   const target = path.join(realRuns, name);
