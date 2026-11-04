@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
@@ -210,6 +210,33 @@ describe("config resolve", () => {
     assert.equal(resolved.envelope.diagnostics[0]?.path, "core/templates/review.md");
     const checked = await run(["doctor", "--root", root], { releaseRoot: release });
     assert.equal(checked.code, EXIT.internal);
+  });
+
+  test("a byte-order mark is rejected, not silently stripped", async () => {
+    const root = await application();
+    const path = join(root, ".design-loom", "app.json");
+    await writeFile(path, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), await readFile(path)]));
+    const { code, envelope } = await run(["config", "resolve", "--root", root]);
+    assert.equal(code, EXIT.invalid);
+    assert.deepEqual(codes(envelope), ["CONFIG_FILE_INVALID_JSON"]);
+  });
+
+  test("an unreadable profile is reported by name and error code only", async (t) => {
+    if (process.platform === "win32" || process.getuid?.() === 0) {
+      t.skip("permission bits don't block reads here");
+      return;
+    }
+    const root = await application();
+    const path = join(root, ".design-loom", "app.json");
+    await chmod(path, 0o000);
+    try {
+      const { code, envelope } = await run(["config", "resolve", "--root", root]);
+      assert.equal(code, EXIT.invalid);
+      assert.deepEqual(codes(envelope), ["CONFIG_FILE_UNREADABLE"]);
+      assert.equal(envelope.diagnostics[0]?.message, ".design-loom/app.json can't be read (EACCES)");
+    } finally {
+      await chmod(path, 0o644);
+    }
   });
 
   test("duplicate JSON keys are rejected", async () => {

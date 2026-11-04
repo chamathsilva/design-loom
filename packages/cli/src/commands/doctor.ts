@@ -159,7 +159,7 @@ async function readWorkspace(
   });
   let value: unknown;
   try {
-    value = parseJson(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    value = parseJson(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes));
   } catch (error) {
     return invalid(`${WORKSPACE_PATH} is not valid JSON: ${(error as Error).message}`);
   }

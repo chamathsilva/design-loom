@@ -36,7 +36,8 @@ export const LOCK_PATH = ".design-loom/framework.lock.json";
 /** Prefix for release resource origins, so provenance never names a local install path. */
 export const RELEASE_ORIGIN = "core";
 
-const decoder = new TextDecoder("utf-8", { fatal: true });
+// ignoreBOM keeps a byte-order mark in the text, so the strict JSON parser rejects it.
+const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
 /** A file could not be read or parsed; it becomes a diagnostic. */
 class LoadError extends Error {
@@ -66,7 +67,17 @@ async function readFileAt(
     const bytes = await fs.readBytes(path);
     return { bytes, sha256: sha256Hex(bytes) };
   } catch (error) {
-    if (!(error instanceof SafeFsError)) throw error;
+    if (!(error instanceof SafeFsError)) {
+      // OS errors such as EACCES name absolute local paths; report the code and the portable name only.
+      const code = (error as NodeJS.ErrnoException).code;
+      if (typeof code !== "string" || !/^E[A-Z]+$/.test(code)) throw error;
+      throw new LoadError(
+        "CONFIG_FILE_UNREADABLE",
+        shownAs,
+        `${shownAs} can't be read (${code})`,
+        "Make the file readable.",
+      );
+    }
     if (error.code === "not-found")
       throw new LoadError("CONFIG_FILE_MISSING", shownAs, `${shownAs} is missing`, missingRemediation);
     throw new LoadError(
