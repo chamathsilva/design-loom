@@ -6,7 +6,9 @@
  * applicability, payload, extensions) and ignores lifecycle and presentation fields such as state,
  * title, context receipts, workflow step, owner role, template versions and the content file path.
  *
- * Callers must verify the content and attachment byte hashes before trusting this digest.
+ * Callers must verify the content and attachment byte hashes before trusting this digest. Paths
+ * and digests are hashed as given, so validate the artifact against its schema and the path policy
+ * first; this function only rejects inputs that would make the projection itself ambiguous.
  */
 
 import { canonicalDigest, compareCodePoints, type JsonValue } from "@design-loom/config";
@@ -70,6 +72,10 @@ function sortedUnique(ids: readonly string[], field: string, artifactId: string)
 /** Builds the exact projection that artifact-semantic-v1 hashes. */
 export function artifactSemanticProjection(artifact: ArtifactSemanticInput): ArtifactSemanticProjection {
   const scope = artifact.scope ?? "change";
+  // The type says "change" | "project", but input may not have been schema-validated.
+  if (scope !== "change" && scope !== "project") {
+    throw new ArtifactSemanticError(`${artifact.id}: unknown scope ${JSON.stringify(scope)}`);
+  }
   if (scope === "change" && artifact.change_id === undefined) {
     throw new ArtifactSemanticError(`${artifact.id}: change-scoped artifact has no change_id`);
   }

@@ -164,4 +164,10 @@ describe("invalid input", () => {
     a.change_id = "CHANGE-001";
     assert.throws(() => artifactSemanticDigest(a), ArtifactSemanticError);
   });
+
+  test("rejects a scope other than change or project", () => {
+    const a = byId("project-artifact") as unknown as { scope: string };
+    a.scope = "global";
+    assert.throws(() => artifactSemanticDigest(a as never), ArtifactSemanticError);
+  });
 });
