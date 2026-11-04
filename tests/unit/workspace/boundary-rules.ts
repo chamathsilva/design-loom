@@ -13,9 +13,9 @@ export const SCOPE = "@design-loom/";
 export const MAY_DO_IO: ReadonlySet<string> = new Set(["cli", "integrations"]);
 
 /**
- * Top-level Node built-ins that touch files, the network, processes or threads, or that can
- * load other modules dynamically (`module` provides createRequire). Sub-paths such as
- * `dns/promises` are matched by their top-level name.
+ * Top-level Node built-ins that touch files, the network, processes or threads, load or run code
+ * dynamically (`module`, `vm`, `wasi`), or expose machine-specific state that breaks determinism
+ * (`os`, `tty`, `v8`). Sub-paths such as `dns/promises` are matched by their top-level name.
  */
 const IO_BUILTINS: ReadonlySet<string> = new Set([
   "child_process",
@@ -29,9 +29,15 @@ const IO_BUILTINS: ReadonlySet<string> = new Set([
   "inspector",
   "module",
   "net",
+  "os",
   "readline",
+  "repl",
   "sqlite",
   "tls",
+  "tty",
+  "v8",
+  "vm",
+  "wasi",
   "worker_threads",
 ]);
 
@@ -39,11 +45,22 @@ const BUILTINS: ReadonlySet<string> = new Set(builtinModules);
 
 /** Globals and helpers that perform I/O or load modules without a static import. */
 const IO_GLOBAL_PATTERNS: ReadonlyArray<[RegExp, string]> = [
-  [/\b(?:fetch|WebSocket|EventSource)\s*\(/, "calls a network global"],
+  // The lookbehind skips method calls such as store.fetch(...).
+  [/(?<![.\w$])(?:fetch|WebSocket|EventSource)\s*\(/, "calls a network global"],
   [/\bnew\s+(?:WebSocket|EventSource)\b/, "constructs a network client"],
   [/\bgetBuiltinModule\b/, "loads a built-in through process.getBuiltinModule"],
   [/\bcreateRequire\b/, "creates a require function"],
 ];
+
+/** import(...) or require(...) calls whose whole first argument isn't one string literal. */
+export function hasNonLiteralModuleLoad(source: string): boolean {
+  const calls = /(?<![.\w$])(?:import|require)\s*\(/g;
+  for (const call of source.matchAll(calls)) {
+    const rest = source.slice((call.index ?? 0) + call[0].length);
+    if (!/^\s*(["'`])[^"'`]*\1\s*[,)]/.test(rest)) return true;
+  }
+  return false;
+}
 
 /** Every module specifier in a source file: static, re-export, side-effect, dynamic and require forms. */
 export function findSpecifiers(source: string): string[] {
@@ -103,6 +120,9 @@ export function sourceViolations(source: string, ctx: FileContext): string[] {
   const reasons = findSpecifiers(source)
     .map((specifier) => specifierViolation(specifier, ctx))
     .filter((reason): reason is string => reason !== undefined);
+  if (hasNonLiteralModuleLoad(source)) {
+    reasons.push(`${ctx.packageDir} loads a module from a non-literal specifier, which can't be checked`);
+  }
   if (!MAY_DO_IO.has(ctx.packageDir)) {
     for (const [pattern, description] of IO_GLOBAL_PATTERNS) {
       if (pattern.test(source)) reasons.push(`pure package ${ctx.packageDir} ${description}`);

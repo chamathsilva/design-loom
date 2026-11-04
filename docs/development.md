@@ -37,7 +37,8 @@ The eight packages come from design doc 02. `tests/unit/workspace/boundaries.tes
 - Every package is private ESM, exports `src/index.ts`, contains only `.ts` sources, and declares no peer or optional dependencies.
 - A package may only import workspace packages it declares, and only by package root: no deep `@design-loom/x/...` imports, and no relative paths that leave the package. This covers static, type, re-export, side-effect, dynamic and `require` imports.
 - Nothing depends on `cli`, and only `cli` may depend on `integrations`.
-- **Only `cli` and `integrations` may do I/O.** Other packages may not import file-system, network, process, thread or module-loading built-ins (for example `node:fs`, `node:dns/promises`, `node:child_process`, `node:module`), call `fetch`, or use `process.getBuiltinModule` or `createRequire`. They work on data passed in, which keeps them pure and testable.
+- **Only `cli` and `integrations` may do I/O.** Other packages may not import file-system, network, process, thread, code-running or machine-specific built-ins (for example `node:fs`, `node:dns/promises`, `node:child_process`, `node:module`, `node:vm`, `node:os`), call `fetch`, or use `process.getBuiltinModule` or `createRequire`. They work on data passed in, which keeps them pure, testable and deterministic.
+- `import(...)` and `require(...)` must take a single string literal in every package, so every dependency can be checked.
 - The internal dependency graph has no cycles.
 - Third-party runtime dependencies must be added to the allowlist in that test. They end up bundled into the plugin, so each one is a deliberate choice.
 

@@ -53,6 +53,11 @@ describe("sourceViolations rejects", () => {
     ["backtick dynamic import", "await import(`node:fs`);", ctx("validation")],
     // biome-ignore lint/suspicious/noTemplateCurlyInString: fixture source text containing a template specifier
     ["template dynamic import", "await import(`node:${name}`);", ctx("validation")],
+    ["variable dynamic import", 'const m = "node:fs";\nawait import(m);', ctx("validation")],
+    ["variable require", "const fs = require(name);", ctx("validation")],
+    ["dynamic import of an expression", 'await import("node:" + "fs");', ctx("cli")],
+    ["vm module", 'import { runInNewContext } from "node:vm";', ctx("validation")],
+    ["os module", 'import { homedir } from "node:os";', ctx("handoff")],
     ["undeclared third-party package", 'import x from "left-pad";', ctx("workflow")],
     ["undeclared scoped third-party package", 'import x from "@acme/tool/sub";', ctx("workflow")],
   ];
@@ -72,6 +77,9 @@ describe("sourceViolations accepts", () => {
     ["pure built-in", 'import { createHash } from "node:crypto";', ctx("artifacts")],
     ["I/O built-in in an adapter package", 'import { readFile } from "node:fs/promises";', ctx("integrations")],
     ["network global in cli", 'await fetch("https://example.com");', ctx("cli")],
+    ["method named fetch", "const row = store.fetch(id);", ctx("artifacts")],
+    ["identifier ending in fetch", "const value = prefetch(id);", ctx("artifacts")],
+    ["os module in an adapter package", 'import { EOL } from "node:os";', ctx("integrations")],
     ["declared third-party package", 'import x from "@acme/tool/sub";', ctx("workflow", ["@acme/tool"])],
   ];
   for (const [name, source, context] of cases) {
