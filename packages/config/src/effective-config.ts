@@ -406,15 +406,20 @@ function checkDigest(digest: string, what: string, path: string, out: Findings):
     out.error("CONFIG_INPUT_INVALID", `${what} is not a lower-case SHA-256`, path, "Report this as a defect.");
 }
 
-/** Every workflow and template descriptor an extension declares must have been loaded, and be valid. */
+/**
+ * Every workflow and template descriptor an extension declares must have been loaded, and be valid.
+ * A descriptor for any other resource, or for no resource at all, is a loader defect.
+ */
 function checkExtensionDescriptors(extension: ExtensionInput, out: Findings): void {
   const view = extension.manifest.value as ExtensionView;
+  const expected = new Set<string>();
   for (const resource of view.resources) {
-    const needsDescriptor =
-      resource.kind === "workflow" || (resource.kind === "template" && isTemplateDescriptorPath(resource.path));
+    const isWorkflow = resource.kind === "workflow";
+    const needsDescriptor = isWorkflow || (resource.kind === "template" && isTemplateDescriptorPath(resource.path));
+    if (needsDescriptor) expected.add(resource.id);
     const descriptor = extension.descriptors.get(resource.id);
-    if (descriptor) {
-      checkSchema(resource.kind === "workflow" ? "workflow" : "template", descriptor, out);
+    if (descriptor && needsDescriptor) {
+      checkSchema(isWorkflow ? "workflow" : "template", descriptor, out);
     } else if (needsDescriptor) {
       out.error(
         "CONFIG_EXTENSION_RESOURCE_MISSING",
@@ -423,6 +428,15 @@ function checkExtensionDescriptors(extension: ExtensionInput, out: Findings): vo
         "Report this as a defect: the loader must parse every workflow and template descriptor.",
       );
     }
+  }
+  for (const id of extension.descriptors.keys()) {
+    if (expected.has(id)) continue;
+    out.error(
+      "CONFIG_EXTENSION_UNEXPECTED_DESCRIPTOR",
+      `a descriptor was supplied for ${id}, which is not a workflow or template descriptor resource`,
+      extension.manifest.origin,
+      "Report this as a defect: the loader must parse descriptors for workflow and .template.json resources only.",
+    );
   }
 }
 
@@ -882,9 +896,11 @@ function checkRepositoriesAndCapabilities(application: ApplicationView, appPath:
       "Use the ID of the repository that holds the design artifacts.",
     );
   }
+  // Like every other ID, capability IDs are unique ignoring case; steps must still name them exactly.
   const capabilityIds = new Set<string>();
+  const foldedCapabilities = new Set<string>();
   for (const [index, capability] of application.capabilities.entries()) {
-    if (capabilityIds.has(capability.id)) {
+    if (foldedCapabilities.has(caseFoldKey(capability.id))) {
       out.error(
         "CONFIG_DUPLICATE_ID",
         `capability ${capability.id} is listed twice`,
@@ -893,6 +909,7 @@ function checkRepositoriesAndCapabilities(application: ApplicationView, appPath:
       );
     }
     capabilityIds.add(capability.id);
+    foldedCapabilities.add(caseFoldKey(capability.id));
   }
   return capabilityIds;
 }

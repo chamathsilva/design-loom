@@ -378,6 +378,15 @@ describe("effective configuration: invalid input", () => {
       ".design-loom/app.json#/repositories/1/id",
     ],
     [
+      "capabilities that differ only in case",
+      (value) => {
+        const capabilities = value.capabilities as { id: string }[];
+        capabilities.push({ ...capabilities[0]!, id: "Requirements.Read" });
+      },
+      "CONFIG_DUPLICATE_ID",
+      ".design-loom/app.json#/capabilities/3/id",
+    ],
+    [
       "workflow step needs a capability the application lacks",
       (value) => {
         value.capabilities = (value.capabilities as { id: string }[]).filter((entry) => entry.id !== "review.verify");
@@ -682,6 +691,17 @@ describe("effective configuration: extensions", () => {
     assert.ok(result.envelope.configuration.artifact_types.includes("example.migration"));
     const trace = result.envelope.provenance.find((entry) => entry.pointer === "/workflows/1");
     assert.equal(trace?.origin, "extensions/database-review/workflows/db-feature.json");
+  });
+
+  test("a descriptor for a resource that has none is a loader defect", () => {
+    const { extension, tuple } = exampleExtension((m) => {
+      m.resources = [{ id: "example.notes", kind: "instructions", path: "notes.md" }];
+      m.rules = [];
+    });
+    const stray = { ...extension, descriptors: new Map([["example.notes", RELEASE.templates[0]!]]) };
+    const result = resolveEffectiveConfig(input({ lock: matchingLock([tuple]), extensions: [stray] }));
+    assert.equal(result.envelope, null);
+    assert.deepEqual(codes(result.diagnostics), ["CONFIG_EXTENSION_UNEXPECTED_DESCRIPTOR"]);
   });
 
   test("a workflow resource whose descriptor wasn't loaded is a loader defect", () => {
