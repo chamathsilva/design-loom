@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.0",
+  "id": "core.test-design",
+  "version": "0.1.0",
+  "artifact_type": "test-design",
+  "content_path": "test-design.md",
+  "sections": [
+    {
+      "key": "context-used",
+      "heading": "Context used",
+      "required": true,
+      "guidance": "Identify source and artifact revisions actually read, linked or unavailable, plus assumptions and context gaps."
+    },
+    {
+      "key": "scope",
+      "heading": "Scope",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "source-requirements",
+      "heading": "Source requirements",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "acceptance-scenarios",
+      "heading": "Acceptance scenarios",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "requirement-to-test-mapping",
+      "heading": "Requirement-to-test mapping",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "integration-and-technical-risks",
+      "heading": "Integration and technical risks",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "test-data-and-environment",
+      "heading": "Test data and environment",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "regression-impact",
+      "heading": "Regression impact",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "execution-status",
+      "heading": "Execution status",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "coverage-gaps",
+      "heading": "Coverage gaps",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    }
+  ]
+}

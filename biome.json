@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!tests/fixtures", "!packages/validation/schemas"]
+    "includes": ["**", "!tests/fixtures", "!packages/validation/schemas", "!packages/config/resources"]
   },
   "formatter": {
     "enabled": true,

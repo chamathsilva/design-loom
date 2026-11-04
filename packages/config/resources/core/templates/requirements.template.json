@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "id": "core.requirements",
+  "version": "0.1.0",
+  "artifact_type": "requirements",
+  "content_path": "requirements.md",
+  "sections": [
+    {
+      "key": "context-used",
+      "heading": "Context used",
+      "required": true,
+      "guidance": "Identify source and artifact revisions actually read, linked or unavailable, plus assumptions and context gaps."
+    },
+    {
+      "key": "scope",
+      "heading": "Scope",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "requirements",
+      "heading": "Requirements",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "acceptance-criteria",
+      "heading": "Acceptance criteria",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "sources",
+      "heading": "Sources",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "exclusions",
+      "heading": "Exclusions",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "open-questions",
+      "heading": "Open questions",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    }
+  ]
+}
