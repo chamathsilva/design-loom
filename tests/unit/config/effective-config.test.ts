@@ -565,6 +565,37 @@ describe("effective configuration: extensions", () => {
     });
   }
 
+  test("extension paths match after normalizing and ignoring case; unsafe entries are named", () => {
+    const { extension, tuple } = exampleExtension();
+    const variant = withValue(application(), (value) => {
+      value.extension_paths = [extension.path.toUpperCase()];
+    });
+    assert.ok(
+      resolveEffectiveConfig(input({ application: variant, lock: matchingLock([tuple]), extensions: [extension] }))
+        .envelope,
+    );
+    const unsafe = withValue(application(), (value) => {
+      value.extension_paths = ["./extensions/x"];
+    });
+    const result = resolveEffectiveConfig(input({ application: unsafe, lock: matchingLock() }));
+    assert.deepEqual(result.diagnostics.find((entry) => entry.code === "CONFIG_EXTENSION_PATHS_MISMATCH")?.evidence, [
+      "not a safe relative path: ./extensions/x",
+    ]);
+  });
+
+  test("two core templates for one artifact type are a damaged release", () => {
+    const [first] = RELEASE.templates;
+    assert.ok(first);
+    const twin = {
+      ...first,
+      origin: "core/templates/twin.template.json",
+      value: { ...(first.value as object), id: "core.twin" },
+    };
+    const result = resolveEffectiveConfig(input({ release: { ...RELEASE, templates: [...RELEASE.templates, twin] } }));
+    assert.equal(result.envelope, null);
+    assert.ok(codes(result.diagnostics).includes("CONFIG_RELEASE_INVALID"));
+  });
+
   test("a manifest that isn't an object is a schema diagnostic, not a crash", () => {
     const { extension, tuple } = exampleExtension();
     const broken = { ...extension, manifest: { ...extension.manifest, value: null } };
@@ -632,7 +663,9 @@ describe("effective configuration: extensions", () => {
 
   test("two extensions with the same ID ignoring case are rejected", () => {
     const first = exampleExtension();
-    const second = exampleExtension((m) => Object.assign(m, { id: "Example.Database-Review" }));
+    const variant = exampleExtension((m) => Object.assign(m, { id: "Example.Database-Review" }));
+    // A separate folder, so the duplicate is caught by ID rather than by folder name.
+    const second = { ...variant, extension: { ...variant.extension, path: "extensions/second-copy" } };
     const result = resolveEffectiveConfig(
       input({ lock: matchingLock([first.tuple]), extensions: [first.extension, second.extension] }),
     );

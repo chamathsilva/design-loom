@@ -442,22 +442,37 @@ function checkExtensionDescriptors(extension: ExtensionInput, out: Findings): vo
 
 /** The extensions supplied must be exactly the folders the application lists in extension_paths. */
 function checkExtensionPaths(input: ResolveInput, out: Findings): void {
-  const listed = (input.application.value as ApplicationView).extension_paths;
-  const supplied = input.extensions.map((extension) => extension.path);
-  const missing = listed.filter((path) => !supplied.includes(path));
-  const extra = supplied.filter((path) => !listed.includes(path));
-  const repeated = supplied.filter((path, index) => supplied.indexOf(path) !== index);
-  if (missing.length + extra.length + repeated.length === 0) return;
+  // Compare normalized, case-folded paths: "ext" and "Ext" are one folder on most file systems.
+  const key = (path: string): string | null => {
+    try {
+      return caseFoldKey(normalizeRelativePath(path));
+    } catch {
+      return null;
+    }
+  };
+  const listedPaths = (input.application.value as ApplicationView).extension_paths;
+  const suppliedPaths = input.extensions.map((extension) => extension.path);
+  const listed = listedPaths.map(key);
+  const supplied = suppliedPaths.map(key);
+  const evidence: string[] = [];
+  listedPaths.forEach((path, index) => {
+    const folded = listed[index] ?? null;
+    if (folded === null) evidence.push(`not a safe relative path: ${path}`);
+    else if (listed.indexOf(folded) !== index) evidence.push(`listed twice: ${path}`);
+    else if (!supplied.includes(folded)) evidence.push(`not loaded: ${path}`);
+  });
+  suppliedPaths.forEach((path, index) => {
+    const folded = supplied[index] ?? null;
+    if (folded === null || !listed.includes(folded)) evidence.push(`not listed: ${path}`);
+    else if (supplied.indexOf(folded) !== index) evidence.push(`loaded twice: ${path}`);
+  });
+  if (evidence.length === 0) return;
   out.error(
     "CONFIG_EXTENSION_PATHS_MISMATCH",
     "the extensions supplied don't match the application's extension_paths",
     pointerPath(input.application.origin, "/extension_paths"),
     "Report this as a defect: the loader must load each listed folder exactly once, and nothing else.",
-    [
-      ...missing.map((path) => `not loaded: ${path}`),
-      ...extra.map((path) => `not listed: ${path}`),
-      ...repeated.map((path) => `loaded twice: ${path}`),
-    ],
+    evidence,
   );
 }
 
@@ -737,8 +752,18 @@ function registerCore(release: ReleaseInput, manifest: ReleaseManifest, registri
         artifactType: view.artifact_type,
         path: document.origin,
       });
-      if (!registries.coreTemplateByType.has(view.artifact_type))
+      const existing = registries.coreTemplateByType.get(view.artifact_type);
+      if (existing) {
+        // One core template per type, so the "core required sections" never depend on input order.
+        out.error(
+          "CONFIG_RELEASE_INVALID",
+          `core templates ${existing.id} and ${view.id} are both for ${view.artifact_type}`,
+          document.origin,
+          "Reinstall the plugin; a release ships one core template per artifact type.",
+        );
+      } else {
         registries.coreTemplateByType.set(view.artifact_type, view);
+      }
     }
   }
 }
