@@ -1,7 +1,7 @@
 // Safe file-system adapter against a real temporary directory (backlog B03, acceptance AT-21).
 
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
@@ -73,6 +73,17 @@ describe("writeAtomic", () => {
     await fs.writeAtomic("b.txt", bytes("one"));
     await fs.writeAtomic("b.txt", bytes("two"), { expectedSha256: sha256Hex(bytes("one")) });
     assert.equal(text(await fs.readBytes("b.txt")), "two");
+  });
+
+  test("keeps the file mode on replacement", async (t) => {
+    if (process.platform === "win32") {
+      t.skip("Windows has no POSIX permission bits");
+      return;
+    }
+    await fs.writeAtomic("modes/run.sh", bytes("v1"));
+    await chmod(join(root, "modes", "run.sh"), 0o755);
+    await fs.writeAtomic("modes/run.sh", bytes("v2"), { expectedSha256: sha256Hex(bytes("v1")) });
+    assert.equal((await stat(join(root, "modes", "run.sh"))).mode & 0o777, 0o755);
   });
 
   test("refuses a replacement when the file changed", async () => {

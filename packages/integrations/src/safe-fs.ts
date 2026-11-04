@@ -188,6 +188,8 @@ export class SafeFileSystem {
       const handle = await open(temp, "wx");
       try {
         await handle.writeFile(bytes);
+        // A replacement keeps the old file's permissions (for example an executable bit).
+        if (current !== undefined) await handle.chmod(current.mode & 0o7777);
         await handle.sync();
       } finally {
         await handle.close();

@@ -11,7 +11,8 @@ export class PathPolicyError extends Error {
 }
 
 /** Device names Windows reserves in any directory, with or without an extension. */
-const WINDOWS_RESERVED = /^(?:con|prn|aux|nul|conin\$|conout\$|com[0-9¹²³]|lpt[0-9¹²³])(?:\..*)?$/i;
+// Windows also maps "CON .txt" (spaces before the extension) to the device.
+const WINDOWS_RESERVED = /^(?:con|prn|aux|nul|conin\$|conout\$|com[0-9¹²³]|lpt[0-9¹²³]) *(?:\..*)?$/i;
 
 /** Longest file or folder name most file systems accept, in UTF-8 bytes. */
 export const MAX_SEGMENT_BYTES = 255;

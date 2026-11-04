@@ -54,6 +54,8 @@ describe("normalizeRelativePath rejects", () => {
     ["reserved COM port", "com1.json"],
     ["reserved console input", "conin$"],
     ["reserved console output with extension", "docs/CONOUT$.txt"],
+    ["reserved name with spaces before the extension", "docs/CON .txt"],
+    ["reserved name with several spaces before the extension", "nul  .md"],
     ["segment longer than 255 bytes", "x".repeat(256)],
     ["multi-byte segment longer than 255 bytes", "é".repeat(128)],
     ["unpaired surrogate", "a\ud800b"],
