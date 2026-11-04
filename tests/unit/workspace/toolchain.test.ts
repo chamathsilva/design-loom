@@ -8,24 +8,60 @@ import { test } from "node:test";
 const ROOT = join(import.meta.dirname, "..", "..", "..");
 const read = (file: string): string => readFileSync(join(ROOT, file), "utf8");
 const rootPackage = JSON.parse(read("package.json")) as {
-  engines: { node: string };
+  engines: { node: string; npm: string };
   packageManager: string;
   devDependencies: Record<string, string>;
 };
 
 const EXACT_VERSION = /^\d+\.\d+\.\d+$/;
+const pinnedNode = read(".nvmrc").trim();
+const pinnedNpm = rootPackage.packageManager.replace(/^npm@/, "");
 
-test("tests run on the supported Node major", () => {
-  const major = process.versions.node.split(".")[0];
-  assert.equal(read(".nvmrc").trim(), major);
-  assert.equal(rootPackage.engines.node, `>=${major} <${Number(major) + 1}`);
+/** Compares two x.y.z versions numerically. */
+function compareVersions(a: string, b: string): number {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+test(".nvmrc pins an exact Node release that the engines range starts from", () => {
+  assert.match(pinnedNode, EXACT_VERSION);
+  const major = Number(pinnedNode.split(".")[0]);
+  assert.equal(rootPackage.engines.node, `>=${pinnedNode} <${major + 1}`);
 });
 
-test("development tools and the package manager are pinned to exact versions", () => {
+test("packageManager pins an exact npm release that the engines range starts from", () => {
+  assert.match(rootPackage.packageManager, /^npm@\d+\.\d+\.\d+$/);
+  const major = Number(pinnedNpm.split(".")[0]);
+  assert.equal(rootPackage.engines.npm, `>=${pinnedNpm} <${major + 1}`);
+});
+
+test("tests run on a Node release inside the engines range", () => {
+  const running = process.versions.node;
+  assert.equal(running.split(".")[0], pinnedNode.split(".")[0], `running Node ${running}`);
+  assert.ok(compareVersions(running, pinnedNode) >= 0, `running Node ${running} is older than ${pinnedNode}`);
+});
+
+test("when run through npm, npm is inside the engines range", (t) => {
+  // npm sets this for scripts, for example "npm/11.19.1 node/v24.22.2 darwin arm64".
+  const agent = process.env.npm_config_user_agent ?? "";
+  const running = /^npm\/(\d+\.\d+\.\d+)/.exec(agent)?.[1];
+  if (running === undefined) {
+    t.skip("not started by npm");
+    return;
+  }
+  assert.equal(running.split(".")[0], pinnedNpm.split(".")[0], `running npm ${running}`);
+  assert.ok(compareVersions(running, pinnedNpm) >= 0, `running npm ${running} is older than ${pinnedNpm}`);
+});
+
+test("development tools are pinned exactly and installs enforce engines", () => {
   for (const [name, version] of Object.entries(rootPackage.devDependencies)) {
     assert.match(version, EXACT_VERSION, `${name} must be pinned exactly`);
   }
-  assert.match(rootPackage.packageManager, /^npm@\d+\.\d+\.\d+$/);
   assert.match(read(".npmrc"), /^save-exact=true$/m);
   assert.match(read(".npmrc"), /^engine-strict=true$/m);
 });

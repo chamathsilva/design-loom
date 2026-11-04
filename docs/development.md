@@ -2,8 +2,10 @@
 
 ## Prerequisites
 
-- **Node.js 24** (the version in `.nvmrc`). With nvm: `nvm install && nvm use`.
-- **npm 11**, which ships with Node 24. No other package manager is needed.
+- **Node.js 24.22.2 or a later 24.x** (`.nvmrc` pins the exact release CI uses). With nvm: `nvm install && nvm use`.
+- **npm 11.19.1 or a later 11.x**, which ships with that Node release. No other package manager is needed.
+
+`engine-strict` is on, so `npm ci` refuses to install with an older Node or npm. CI uses exactly the pinned versions and fails if they differ.
 
 ## Everyday commands
 

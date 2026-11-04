@@ -34,6 +34,15 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      - name: Check Node and npm match the pinned versions
+        shell: bash
+        run: |
+          expected_node="v$(tr -d '[:space:]' < .nvmrc)"
+          expected_npm="$(node -p "require('./package.json').packageManager.replace('npm@', '')")"
+          echo "node $(node --version) (expected $expected_node), npm $(npm --version) (expected $expected_npm)"
+          test "$(node --version)" = "$expected_node"
+          test "$(npm --version)" = "$expected_npm"
+
       - name: Install exact locked dependencies
         run: npm ci
 
