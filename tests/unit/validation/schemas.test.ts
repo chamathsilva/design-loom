@@ -2,6 +2,7 @@
 // Mirrors the design package's own checker: same instance mapping, same negative mutations.
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
@@ -58,7 +59,29 @@ function refs(node: unknown): string[] {
   );
 }
 
+const SCHEMAS_DIR = join(import.meta.dirname, "..", "..", "..", "packages", "validation", "schemas");
+
 describe("bundled schemas", () => {
+  test("match the sha256 table in schemas/README.md byte for byte", () => {
+    const readme = readFileSync(join(SCHEMAS_DIR, "README.md"), "utf8");
+    const table = [...readme.matchAll(/^\| `([a-z-]+\.schema\.json)` \| `([0-9a-f]{64})` \|$/gm)];
+    assert.equal(table.length, 18);
+    for (const [, file = "", expected] of table) {
+      const actual = createHash("sha256")
+        .update(readFileSync(join(SCHEMAS_DIR, file)))
+        .digest("hex");
+      assert.equal(actual, expected, file);
+    }
+  });
+
+  test("known design gap: a line break hides parent traversal from the path pattern", () => {
+    // Recorded in schemas/README.md. When the design package fixes its patterns and the copies are
+    // refreshed, this starts failing: flip it to assert the path is rejected.
+    const value = read("examples/artifacts/DESIGN-001.json") as { content: { path: string } };
+    value.content.path = "docs\n/../../outside.md";
+    assert.equal(validateAgainstSchema("artifact", value).valid, true);
+  });
+
   test("are frozen, so a caller can't change validation for everyone else", () => {
     const schema = schemaFor("workspace") as { properties: { schema_version: Record<string, unknown> } };
     assert.throws(() => {
