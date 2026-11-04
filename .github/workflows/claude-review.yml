@@ -1,0 +1,65 @@
+name: claude-review
+
+# Automatic Claude review of pull requests from this repository.
+# Uses `pull_request`, not `pull_request_target`: fork PRs never receive secrets,
+# and the job is skipped for them (design doc 09/11 CI trust rules).
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Claude review
+        uses: anthropics/claude-code-action@e4a6faad497d33dbc7144135c75e41f82f0bf6c0 # v1.0.255
+        with:
+          # Set one of these repository secrets. CLAUDE_CODE_OAUTH_TOKEN comes from
+          # `claude setup-token` (Claude Pro/Max); ANTHROPIC_API_KEY from the Claude Console.
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Review this pull request for Design Loom, a GitHub Copilot plugin with a
+            deterministic TypeScript CLI. Read CONTRIBUTING.md and docs/development.md
+            first. The PR branch is already checked out.
+
+            Focus on, in order:
+            1. Correctness bugs and missing edge cases, especially in hashing,
+               canonical JSON, path handling and graph logic.
+            2. Determinism and cross-platform behaviour (Windows, macOS, Linux):
+               the same input bytes must give the same output and digests.
+            3. Safety: path containment, no shell execution from data, no
+               credentials or local absolute paths in outputs.
+            4. Package boundaries: pure packages must not do provider I/O; only
+               cli may depend on integrations.
+            5. Tests: real assertions, negative cases, and no claim that untested
+               behaviour works.
+
+            Skip style nits that Biome already enforces. Be concise. If the PR
+            looks good, say so in one short comment.
+
+            Use `mcp__github_inline_comment__create_inline_comment` (with `confirmed: true`)
+            for specific code issues and `gh pr comment` for one top-level summary.
+            Only post GitHub comments; don't submit review text as messages.
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Glob,Grep"
