@@ -53,20 +53,31 @@ interface Workflow {
 type WorkspaceMap = ReadonlyMap<string, string>;
 
 /** Whether a repository-relative path exists inside the root. */
+/** True for an OS error such as EACCES or ELOOP: something the user can fix, not a defect. */
+function isOsError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  return typeof code === "string" && /^E[A-Z]+$/.test(code);
+}
+
 async function pathState(app: SafeFileSystem, path: string): Promise<CapabilityState> {
   try {
     await app.listDirectory(path);
     return "ready";
   } catch (error) {
     if (error instanceof SafeFsError && error.code === "not-a-file") return "ready";
-    if (error instanceof SafeFsError) return "unavailable";
+    if (error instanceof SafeFsError || isOsError(error)) return "unavailable";
     throw error;
   }
 }
 
-/** Whether a folder is a Git checkout (it has a `.git` folder or file). */
+/** Whether a folder is a Git checkout (it has a `.git` folder or file). An unreadable folder isn't one. */
 async function hasGit(folder: SafeFileSystem): Promise<boolean> {
-  return (await folder.listDirectory("")).some((entry) => entry.name === ".git");
+  try {
+    return (await folder.listDirectory("")).some((entry) => entry.name === ".git");
+  } catch (error) {
+    if (error instanceof SafeFsError || isOsError(error)) return false;
+    throw error;
+  }
 }
 
 async function probe(

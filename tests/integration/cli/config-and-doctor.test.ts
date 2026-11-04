@@ -258,6 +258,9 @@ describe("invocation", () => {
       const { code, envelope } = await run(args);
       assert.equal(code, EXIT.invalid, args.join(" "));
       assert.deepEqual(codes(envelope), ["CLI_INVALID_ROOT"]);
+      // Only the envelope's root field may carry the given path, never a diagnostic.
+      const path = args[2];
+      if (path !== undefined) assert.ok(!JSON.stringify(envelope.diagnostics).includes(path), path);
     }
   });
 
@@ -437,6 +440,26 @@ describe("doctor", () => {
     assert.equal(invalid?.path, workspacePath);
     assert.equal(invalid?.message, `${workspacePath} can't be read: EACCES`);
     assert.ok(!JSON.stringify(envelope.diagnostics).includes(root));
+  });
+
+  test("an unreadable capability folder is unavailable, not a crash", async (t) => {
+    if (process.platform === "win32" || process.getuid?.() === 0) {
+      t.skip("permission bits don't block reads here");
+      return;
+    }
+    const root = await application();
+    const snapshots = join(root, "sources", "snapshots");
+    await chmod(join(root, "sources"), 0o000);
+    try {
+      const { code, envelope } = await run(["doctor", "--root", root]);
+      assert.equal(code, EXIT.unavailable, JSON.stringify(envelope.diagnostics));
+      assert.ok(!codes(envelope).includes("CLI_INTERNAL_ERROR"));
+      const result = envelope.result as { capabilities: { id: string; state: string }[] };
+      assert.equal(result.capabilities.find((entry) => entry.id === "requirements.read")?.state, "unavailable");
+      assert.ok(!JSON.stringify(envelope.diagnostics).includes(snapshots));
+    } finally {
+      await chmod(join(root, "sources"), 0o755);
+    }
   });
 
   test("an old Node.js runtime blocks", async () => {

@@ -44,13 +44,14 @@ export async function openRoot(root: string | undefined): Promise<SafeFileSystem
       }),
     ]);
   if (root === undefined) throw invalid("--root is required");
-  if (!isAbsolute(root)) throw invalid(`--root must be an absolute path: ${root}`);
+  // Messages don't repeat the path: only the envelope's `root` field carries it (run.schema.json).
+  if (!isAbsolute(root)) throw invalid("--root must be an absolute path");
   try {
     return await SafeFileSystem.open(root);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (error instanceof SafeFsError || code === "ENOENT" || code === "ENOTDIR") {
-      throw invalid(`--root is not an existing folder: ${root}`);
+      throw invalid("--root is not an existing folder");
     }
     throw error;
   }
