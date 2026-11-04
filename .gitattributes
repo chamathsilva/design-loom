@@ -1,0 +1,11 @@
+# Design Loom hashes stored bytes, so text files must use LF on every platform
+# (design package docs/07). Binary files are never normalized.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary

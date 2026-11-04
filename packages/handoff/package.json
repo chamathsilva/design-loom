@@ -1,0 +1,10 @@
+{
+  "name": "@design-loom/handoff",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Snapshot handoff packaging and verification.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

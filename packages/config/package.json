@@ -1,0 +1,10 @@
+{
+  "name": "@design-loom/config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Application profile, framework lock and effective-configuration resolution.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

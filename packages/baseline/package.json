@@ -1,0 +1,10 @@
+{
+  "name": "@design-loom/baseline",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Optional reviewed-baseline proposals, lineage and verification policy.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
