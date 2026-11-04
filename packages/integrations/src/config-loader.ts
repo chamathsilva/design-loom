@@ -200,6 +200,8 @@ export interface LoadedConfiguration {
   /** Null when a required file is missing or unreadable; the diagnostics say why. */
   input: ResolveInput | null;
   diagnostics: Diagnostic[];
+  /** False when the plugin's own core resources couldn't be loaded: a broken install, not bad input. */
+  releaseLoaded: boolean;
 }
 
 /**
@@ -252,7 +254,9 @@ export async function loadConfiguration(
     for (const raw of paths) {
       let folder: string;
       try {
-        folder = normalizeRelativePath(String(raw));
+        if (typeof raw !== "string")
+          throw new Error(`extension_paths entries must be strings, not ${JSON.stringify(raw)}`);
+        folder = normalizeRelativePath(raw);
       } catch (error) {
         diagnostics.push(
           diagnostic("CONFIG_EXTENSION_INVALID", "error", (error as Error).message, {
@@ -268,11 +272,12 @@ export async function loadConfiguration(
   }
 
   if (!releaseInput || !application || !lock || diagnostics.length > 0) {
-    return { input: null, diagnostics: sortDiagnostics(diagnostics) };
+    return { input: null, diagnostics: sortDiagnostics(diagnostics), releaseLoaded: releaseInput !== null };
   }
   const strip = ({ origin, sha256, value }: SourceDocument): SourceDocument => ({ origin, sha256, value });
   return {
     input: { release: releaseInput, application: strip(application), lock: strip(lock), extensions },
     diagnostics: [],
+    releaseLoaded: true,
   };
 }

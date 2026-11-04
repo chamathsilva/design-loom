@@ -69,6 +69,8 @@ async function openRelease(context: CliContext): Promise<SafeFileSystem> {
 }
 
 export interface Resolution {
+  /** False when the plugin's own core resources couldn't be loaded (exit 5, not a user error). */
+  releaseLoaded: boolean;
   input: ResolveInput | null;
   result: ResolveResult | null;
   /** Loader diagnostics; resolver diagnostics are in `result`. */
@@ -79,8 +81,10 @@ export interface Resolution {
 export async function resolveConfiguration(app: SafeFileSystem, context: CliContext): Promise<Resolution> {
   const release = await openRelease(context);
   const loaded = await loadConfiguration(app, release, context.engineSha256);
-  if (!loaded.input) return { input: null, result: null, diagnostics: loaded.diagnostics };
-  return { input: loaded.input, result: resolveEffectiveConfig(loaded.input), diagnostics: [] };
+  if (!loaded.input) {
+    return { releaseLoaded: loaded.releaseLoaded, input: null, result: null, diagnostics: loaded.diagnostics };
+  }
+  return { releaseLoaded: true, input: loaded.input, result: resolveEffectiveConfig(loaded.input), diagnostics: [] };
 }
 
 /** Framework version of the running release, for envelopes; "0.0.0" when it can't be read. */

@@ -121,6 +121,20 @@ async function probe(
   };
 }
 
+function invalidWorkspace(
+  diagnostics: Diagnostic[],
+  message: string,
+  path = WORKSPACE_PATH,
+): { state: "invalid"; map: null } {
+  diagnostics.push(
+    diagnostic("DOCTOR_WORKSPACE_INVALID", "error", message, {
+      path,
+      remediation: "Fix the local workspace map: each repository ID mapped to an absolute checkout path.",
+    }),
+  );
+  return { state: "invalid", map: null };
+}
+
 /** Reads the ignored local workspace map, if any. */
 async function readWorkspace(
   app: SafeFileSystem,
@@ -131,17 +145,13 @@ async function readWorkspace(
     bytes = await app.readBytes(WORKSPACE_PATH);
   } catch (error) {
     if (error instanceof SafeFsError && error.code === "not-found") return { state: "absent", map: null };
-    throw error;
+    // A folder, an escaping symlink or an unreadable file: the user can fix it, so it's invalid input.
+    const code = (error as NodeJS.ErrnoException).code;
+    if (!(error instanceof SafeFsError) && !(typeof code === "string" && /^E[A-Z]+$/.test(code))) throw error;
+    return invalidWorkspace(diagnostics, `${WORKSPACE_PATH} can't be read: ${(error as Error).message}`);
   }
-  const invalid = (message: string, path = WORKSPACE_PATH): { state: "invalid"; map: null } => {
-    diagnostics.push(
-      diagnostic("DOCTOR_WORKSPACE_INVALID", "error", message, {
-        path,
-        remediation: "Fix the local workspace map: each repository ID mapped to an absolute checkout path.",
-      }),
-    );
-    return { state: "invalid", map: null };
-  };
+  const invalid = (message: string, path = WORKSPACE_PATH): { state: "invalid"; map: null } =>
+    invalidWorkspace(diagnostics, message, path);
   let value: unknown;
   try {
     value = parseJson(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
@@ -199,7 +209,8 @@ export async function doctor(
   const result = resolution.result;
   diagnostics.push(...resolution.diagnostics, ...(result?.diagnostics ?? []));
   const lock = result?.lock ?? null;
-  if (!result?.envelope) exits.push(EXIT.invalid);
+  if (!resolution.releaseLoaded) exits.push(EXIT.internal);
+  else if (!result?.envelope) exits.push(EXIT.invalid);
   if (lock) {
     const states = [lock.framework_version, lock.engine, lock.resources, lock.extensions];
     if (states.includes("mismatch")) exits.push(EXIT.stale);

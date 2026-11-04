@@ -187,6 +187,31 @@ describe("config resolve", () => {
     assert.equal(envelope.diagnostics[0]?.path, ".design-loom/app.json");
   });
 
+  test("extension_paths entries must be safe relative strings", async () => {
+    for (const entry of [5, ["a"], "../outside"]) {
+      const root = await application();
+      await editJson(join(root, ".design-loom", "app.json"), (value) => {
+        value.extension_paths = [entry];
+      });
+      const { code, envelope } = await run(["config", "resolve", "--root", root]);
+      assert.equal(code, EXIT.invalid, JSON.stringify(entry));
+      assert.deepEqual(codes(envelope), ["CONFIG_EXTENSION_INVALID"], JSON.stringify(entry));
+    }
+  });
+
+  test("a broken plugin install is an internal error, not bad configuration", async () => {
+    const release = join(scratch, `broken-release-${++counter}`);
+    await cp(CORE, release, { recursive: true });
+    await rm(join(release, "templates", "review.md"));
+    const root = await application();
+    const resolved = await run(["config", "resolve", "--root", root], { releaseRoot: release });
+    assert.equal(resolved.code, EXIT.internal);
+    assert.deepEqual(codes(resolved.envelope), ["CONFIG_FILE_MISSING"]);
+    assert.equal(resolved.envelope.diagnostics[0]?.path, "core/templates/review.md");
+    const checked = await run(["doctor", "--root", root], { releaseRoot: release });
+    assert.equal(checked.code, EXIT.internal);
+  });
+
   test("duplicate JSON keys are rejected", async () => {
     const root = await application();
     await writeFile(join(root, ".design-loom", "app.json"), '{"schema_version":"1.0","schema_version":"1.0"}');
@@ -225,6 +250,19 @@ describe("invocation", () => {
     assert.equal(code, EXIT.invalid);
     assert.equal(stdout, "");
     assert.match(stderr, /--force/);
+  });
+
+  test("with --json, an argument error still prints one envelope", async () => {
+    let stdout = "";
+    const code = await runCli(
+      ["doctor", "--force", "--json"],
+      { stdout: (t) => (stdout += t), stderr: () => {} },
+      context(),
+    );
+    assert.equal(code, EXIT.invalid);
+    const envelope = JSON.parse(stdout) as ResultEnvelope;
+    assert.equal(envelope.status, "failed");
+    assert.deepEqual(codes(envelope), ["CLI_INVALID_ARGS"]);
   });
 
   test("without --json the output is a short summary", async () => {
@@ -303,6 +341,15 @@ describe("doctor", () => {
     const { code, envelope } = await run(["doctor", "--root", root]);
     assert.equal(code, EXIT.invalid);
     assert.ok(codes(envelope).includes("DOCTOR_WORKSPACE_INVALID"));
+  });
+
+  test("a workspace map that isn't a readable file is invalid configuration, not a crash", async () => {
+    const root = await application({ map: false });
+    await mkdir(join(root, ".design-loom", "workspace.local.json"));
+    const { code, envelope } = await run(["doctor", "--root", root]);
+    assert.equal(code, EXIT.invalid);
+    assert.ok(codes(envelope).includes("DOCTOR_WORKSPACE_INVALID"));
+    assert.ok(!codes(envelope).includes("CLI_INTERNAL_ERROR"));
   });
 
   test("an old Node.js runtime blocks", async () => {

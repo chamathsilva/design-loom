@@ -23,7 +23,8 @@ export async function configResolve(options: { root?: string }, context: CliCont
   if (!result?.envelope) {
     return {
       status: "failed",
-      exitCode: EXIT.invalid,
+      // A broken plugin install is an internal failure; anything else is the application's configuration.
+      exitCode: resolution.releaseLoaded ? EXIT.invalid : EXIT.internal,
       resolution,
       diagnostics,
       result: { effective_config_digest: null, lock: result?.lock ?? null, effective_config: null },

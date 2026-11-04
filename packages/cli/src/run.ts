@@ -59,6 +59,25 @@ export async function runCli(argv: readonly string[], io: CliIo, context: CliCon
     });
   } catch (error) {
     io.stderr(`${(error as Error).message}\n${USAGE}`);
+    // --json promises one envelope on stdout, even when the arguments can't be parsed.
+    if (argv.includes("--json")) {
+      const envelope = buildEnvelope({
+        command: "(invalid)",
+        status: "failed",
+        root: "",
+        frameworkVersion: "0.0.0",
+        options: {},
+        inputs: [],
+        diagnostics: [
+          diagnostic("CLI_INVALID_ARGS", "error", (error as Error).message, {
+            remediation: "Run one of the commands in the usage text.",
+          }),
+        ],
+        result: null,
+        now: context.now(),
+      });
+      io.stdout(`${JSON.stringify(envelope, null, 2)}\n`);
+    }
     return EXIT.invalid;
   }
   const options: Options = parsed.values;
