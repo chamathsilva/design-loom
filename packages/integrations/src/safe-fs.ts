@@ -23,7 +23,7 @@
 import { randomBytes } from "node:crypto";
 import { link, lstat, mkdir, open, readdir, readFile, realpath, rename, rm } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
-import { caseFoldKey, normalizeRelativePath, sha256Hex } from "@design-loom/config";
+import { caseFoldKey, compareCodePoints, normalizeRelativePath, sha256Hex } from "@design-loom/config";
 
 export type SafeFsErrorCode =
   | "outside-root"
@@ -43,6 +43,12 @@ export class SafeFsError extends Error {
     super(message);
     this.code = code;
   }
+}
+
+/** One folder entry. Symlinks are reported as such and never followed by a listing. */
+export interface DirectoryEntry {
+  name: string;
+  kind: "file" | "directory" | "symlink" | "other";
 }
 
 export interface WriteOptions {
@@ -139,6 +145,40 @@ export class SafeFileSystem {
     }
     if (!(await lstat(real)).isFile()) throw new SafeFsError("not-a-file", `${relativePath} is not a file`);
     return new Uint8Array(await readFile(real));
+  }
+
+  /**
+   * Lists a folder ("" for the root), sorted by name in code-point order. The folder must resolve
+   * inside the root and match its on-disk name exactly; entries are not followed.
+   */
+  async listDirectory(relativePath: string): Promise<DirectoryEntry[]> {
+    const normalized = relativePath === "" ? "" : normalizeRelativePath(relativePath);
+    if (normalized !== "") await this.assertExactNames(normalized, relativePath);
+    const target = normalized === "" ? this.root : this.resolve(normalized);
+    let real: string;
+    try {
+      real = await realpath(target);
+    } catch (error) {
+      if (isNotFound(error)) throw new SafeFsError("not-found", `${relativePath} does not exist`);
+      throw error;
+    }
+    if (!isInside(this.root, real)) throw new SafeFsError("outside-root", `${relativePath} resolves outside the root`);
+    if (!(await lstat(real)).isDirectory()) throw new SafeFsError("not-a-file", `${relativePath} is not a folder`);
+    const entries = await readdir(real, { withFileTypes: true });
+    return entries
+      .map(
+        (entry): DirectoryEntry => ({
+          name: entry.name,
+          kind: entry.isFile()
+            ? "file"
+            : entry.isDirectory()
+              ? "directory"
+              : entry.isSymbolicLink()
+                ? "symlink"
+                : "other",
+        }),
+      )
+      .sort((a, b) => compareCodePoints(a.name, b.name));
   }
 
   /** Writes bytes atomically. See WriteOptions for the overwrite rules. */
