@@ -176,6 +176,18 @@ describe("strict parsing", () => {
     }
   });
 
+  test("parses many numbers in linear time", () => {
+    const count = 200_000;
+    const text = `[${Array.from({ length: count }, (_, i) => i).join(",")}]`;
+    const started = performance.now();
+    const parsed = parseJson(text) as number[];
+    const elapsed = performance.now() - started;
+    assert.equal(parsed.length, count);
+    assert.equal(parsed[count - 1], count - 1);
+    // Quadratic copying took seconds at this size; linear parsing takes milliseconds.
+    assert.ok(elapsed < 2000, `took ${Math.round(elapsed)} ms`);
+  });
+
   test("combines escaped surrogate pairs into one code point", () => {
     assert.equal(parseJson('"\\ud83d\\ude00"'), "\u{1f600}");
   });

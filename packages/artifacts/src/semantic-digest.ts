@@ -73,6 +73,9 @@ export function artifactSemanticProjection(artifact: ArtifactSemanticInput): Art
   if (scope === "change" && artifact.change_id === undefined) {
     throw new ArtifactSemanticError(`${artifact.id}: change-scoped artifact has no change_id`);
   }
+  if (scope === "project" && artifact.change_id !== undefined) {
+    throw new ArtifactSemanticError(`${artifact.id}: project-scoped artifact must not have a change_id`);
+  }
 
   const attachments = artifact.attachments
     .map((attachment) => ({ path: attachment.path, sha256: attachment.sha256 }))
@@ -89,7 +92,7 @@ export function artifactSemanticProjection(artifact: ArtifactSemanticInput): Art
     id: artifact.id,
     type: artifact.type,
     scope,
-    change_id: scope === "change" ? (artifact.change_id ?? null) : null,
+    change_id: artifact.change_id ?? null,
     content_sha256: artifact.content.sha256,
     attachments,
     depends_on: sortedUnique(artifact.depends_on, "depends_on", artifact.id),

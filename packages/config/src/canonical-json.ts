@@ -22,6 +22,9 @@ export class CanonicalJsonError extends Error {
 
 const MAX_DEPTH = 1000;
 
+/** Sticky (y) so it matches at lastIndex without copying the rest of the input. */
+const NUMBER_PATTERN = /(-?)(0|[1-9]\d*)(?:\.(\d+))?(?:[eE]([+-]?\d+))?/y;
+
 /** Compares strings by Unicode scalar value sequence; a shorter prefix sorts first. */
 export function compareCodePoints(a: string, b: string): number {
   let i = 0;
@@ -129,7 +132,8 @@ export function parseJson(text: string): JsonValue {
    * "1.0000000000000000001" are rejected instead of being rounded.
    */
   const parseNumber = (): number => {
-    const match = /^(-?)(0|[1-9]\d*)(?:\.(\d+))?(?:[eE]([+-]?\d+))?/.exec(text.slice(pos));
+    NUMBER_PATTERN.lastIndex = pos;
+    const match = NUMBER_PATTERN.exec(text);
     if (match === null) return fail("invalid number");
     const [literal, sign = "", whole = "", fraction = "", exponentText = "0"] = match;
     pos += literal.length;

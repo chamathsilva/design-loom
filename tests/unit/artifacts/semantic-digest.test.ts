@@ -154,8 +154,14 @@ describe("invalid input", () => {
     assert.throws(() => artifactSemanticDigest(a), ArtifactSemanticError);
   });
 
-  test("project scope always projects change_id as null", () => {
+  test("project scope projects change_id as null", () => {
     const a = byId("project-artifact");
     assert.equal(artifactSemanticProjection(a).change_id, null);
+  });
+
+  test("rejects a project-scoped artifact that has a change_id", () => {
+    const a = byId("project-artifact");
+    a.change_id = "CHANGE-001";
+    assert.throws(() => artifactSemanticDigest(a), ArtifactSemanticError);
   });
 });
