@@ -1,0 +1,19 @@
+{
+  "name": "@design-loom/cli",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Command surface, JSON result envelopes and exit codes for skills and CI.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@design-loom/config": "0.0.0",
+    "@design-loom/artifacts": "0.0.0",
+    "@design-loom/workflow": "0.0.0",
+    "@design-loom/validation": "0.0.0",
+    "@design-loom/baseline": "0.0.0",
+    "@design-loom/handoff": "0.0.0",
+    "@design-loom/integrations": "0.0.0"
+  }
+}

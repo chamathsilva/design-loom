@@ -1,0 +1,10 @@
+{
+  "name": "@design-loom/artifacts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Artifact and source records, project/change scope, digests and the reference graph index.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

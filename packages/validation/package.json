@@ -1,0 +1,10 @@
+{
+  "name": "@design-loom/validation",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Rule engine (DL001-DL016), template descriptors and diagnostics.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

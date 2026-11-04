@@ -1,0 +1,10 @@
+{
+  "name": "@design-loom/workflow",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Advisory workflow descriptors and independent maturity/status calculation.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

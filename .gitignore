@@ -1,0 +1,9 @@
+node_modules/
+coverage/
+dist/
+*.tsbuildinfo
+.DS_Store
+
+# Local Design Loom state never belongs in Git (design package docs/03).
+.design-loom/workspace.local.json
+.design-loom/runs/
