@@ -21,7 +21,7 @@ export const EFFECTIVE_CONFIG_SCHEMA_VERSION = "1.0";
 export const BUILT_IN_OUTPUT_KINDS: readonly string[] = ["baseline", "handoff"];
 
 const ID = /^[A-Za-z][A-Za-z0-9._-]{1,79}$/;
-const RULE_ID = /^DL[0-9]{3}$/;
+const RULE_ID = /^DL\d{3}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 
 // ---------------------------------------------------------------------------------------------------
@@ -318,68 +318,122 @@ function topologicalOrder(extensions: readonly ExtensionView[]): string[] | null
 }
 
 // ---------------------------------------------------------------------------------------------------
-// The resolver
+// The resolver, one function per step of design doc 03 "Configuration resolution"
 
-/** Resolves the effective configuration. Never throws for bad input; problems become diagnostics. */
-export function resolveEffectiveConfig(input: ResolveInput): ResolveResult {
-  // Problems that stop resolution, and lock comparisons, which are reported but don't stop it.
-  const diagnostics: Diagnostic[] = [];
-  const lockDiagnostics: Diagnostic[] = [];
-  const error = (code: string, message: string, path: string, remediation: string, evidence: string[] = []): void => {
-    diagnostics.push(diagnostic(code, "error", message, { path, evidence, remediation }));
-  };
-  const lockError = (
-    code: string,
-    message: string,
-    path: string,
-    remediation: string,
-    evidence: string[] = [],
-  ): void => {
-    lockDiagnostics.push(diagnostic(code, "error", message, { path, evidence, remediation }));
-  };
-  const fail = (lock: LockReport | null = null): ResolveResult => ({
-    envelope: null,
-    digest: null,
-    lock,
-    diagnostics: sortDiagnostics([...diagnostics, ...lockDiagnostics]),
-  });
+/** Diagnostics from one resolution: problems that stop it, and lock comparisons, which don't. */
+class Findings {
+  readonly blocking: Diagnostic[] = [];
+  readonly lock: Diagnostic[] = [];
 
-  const checkSchema = (kind: SchemaKind, document: SourceDocument): boolean => {
-    const result = validateAgainstSchema(kind, document.value);
-    for (const issue of result.issues) {
-      error(
-        "CONFIG_SCHEMA_INVALID",
-        `${kind}: ${issue.message}`,
-        pointerPath(document.origin, issue.instancePath),
-        `Fix the file so it matches ${kind}.schema.json.`,
-        [issue.schemaPath],
+  error(code: string, message: string, path: string, remediation: string, evidence: string[] = []): void {
+    this.blocking.push(diagnostic(code, "error", message, { path, evidence, remediation }));
+  }
+
+  lockError(code: string, message: string, path: string, remediation: string, evidence: string[] = []): void {
+    this.lock.push(diagnostic(code, "error", message, { path, evidence, remediation }));
+  }
+
+  get failed(): boolean {
+    return hasErrors(this.blocking);
+  }
+
+  all(): Diagnostic[] {
+    return sortDiagnostics([...this.blocking, ...this.lock]);
+  }
+}
+
+type ExtensionEntry = { input: ExtensionInput; view: ExtensionView };
+
+interface Registries {
+  artifactTypes: Map<string, { id: string; origin: SourceDocument }>;
+  ruleIds: Map<string, string>;
+  workflows: Map<string, { document: SourceDocument; view: WorkflowView }>;
+  templates: Map<string, { document: SourceDocument; view: TemplateView }>;
+  /** Every selectable template, including extension Markdown templates that have no descriptor. */
+  templateTypes: Map<string, { id: string; artifactType: string; path: string }>;
+  resourceIds: Map<string, string>;
+}
+
+const knownType = (registries: Registries, type: string): boolean =>
+  registries.artifactTypes.get(caseFoldKey(type))?.id === type;
+
+/** Adds an ID to a registry unless it is already there ignoring case; there is no override (design doc 06). */
+function register<T>(
+  registry: Map<string, T>,
+  id: string,
+  value: T,
+  label: string,
+  path: string,
+  out: Findings,
+): boolean {
+  if (registry.has(caseFoldKey(id))) {
+    out.error(
+      "CONFIG_DUPLICATE_ID",
+      `${label} ${id} is defined twice`,
+      path,
+      `Rename one of the ${label}s; nothing can override another.`,
+    );
+    return false;
+  }
+  registry.set(caseFoldKey(id), value);
+  return true;
+}
+
+function checkSchema(kind: SchemaKind, document: SourceDocument, out: Findings): boolean {
+  const result = validateAgainstSchema(kind, document.value);
+  for (const issue of result.issues) {
+    out.error(
+      "CONFIG_SCHEMA_INVALID",
+      `${kind}: ${issue.message}`,
+      pointerPath(document.origin, issue.instancePath),
+      `Fix the file so it matches ${kind}.schema.json.`,
+      [issue.schemaPath],
+    );
+  }
+  return result.valid;
+}
+
+function checkDigest(digest: string, what: string, path: string, out: Findings): void {
+  if (!SHA256.test(digest))
+    out.error("CONFIG_INPUT_INVALID", `${what} is not a lower-case SHA-256`, path, "Report this as a defect.");
+}
+
+/** Every workflow and template descriptor an extension declares must have been loaded, and be valid. */
+function checkExtensionDescriptors(extension: ExtensionInput, out: Findings): void {
+  const view = extension.manifest.value as ExtensionView;
+  for (const resource of view.resources) {
+    const needsDescriptor =
+      resource.kind === "workflow" || (resource.kind === "template" && isTemplateDescriptorPath(resource.path));
+    const descriptor = extension.descriptors.get(resource.id);
+    if (descriptor) {
+      checkSchema(resource.kind === "workflow" ? "workflow" : "template", descriptor, out);
+    } else if (needsDescriptor) {
+      out.error(
+        "CONFIG_EXTENSION_RESOURCE_MISSING",
+        `resource ${resource.id} was not loaded`,
+        extension.manifest.origin,
+        "Report this as a defect: the loader must parse every workflow and template descriptor.",
       );
     }
-    return result.valid;
-  };
-  const checkDigest = (document: SourceDocument): void => {
-    if (!SHA256.test(document.sha256)) {
-      error(
-        "CONFIG_INPUT_INVALID",
-        "input digest is not a lower-case SHA-256",
-        document.origin,
-        "Report this as a defect.",
-      );
-    }
-  };
+  }
+}
 
-  // 1. Structure: every input matches its contract.
+/** Step 1: every input matches its contract. */
+function checkInputs(
+  input: ResolveInput,
+  out: Findings,
+): { manifest: ReleaseManifest | null; applicationValid: boolean; lockValid: boolean } {
   const { release } = input;
   const releaseCheck = checkReleaseManifest(release.manifest.value);
   for (const problem of releaseCheck.problems) {
-    error(
+    out.error(
       "CONFIG_RELEASE_INVALID",
       problem,
       release.manifest.origin,
       "Reinstall the plugin; its core resources are damaged.",
     );
   }
-  const allDocuments = [
+  const documents = [
     release.manifest,
     ...release.workflows,
     ...release.templates,
@@ -387,173 +441,172 @@ export function resolveEffectiveConfig(input: ResolveInput): ResolveResult {
     input.lock,
     ...input.extensions.flatMap((extension) => [extension.manifest, ...extension.descriptors.values()]),
   ];
-  for (const document of allDocuments) checkDigest(document);
-  for (const digest of [release.resourcesSha256, ...input.extensions.map((extension) => extension.resourcesSha256)]) {
-    if (!SHA256.test(digest))
-      error("CONFIG_INPUT_INVALID", "resource digest is not a lower-case SHA-256", "", "Report this as a defect.");
-  }
-  if (release.engineSha256 !== null && !SHA256.test(release.engineSha256)) {
-    error("CONFIG_INPUT_INVALID", "engine digest is not a lower-case SHA-256", "", "Report this as a defect.");
-  }
+  for (const document of documents) checkDigest(document.sha256, "input digest", document.origin, out);
+  checkDigest(release.resourcesSha256, "resource digest", "", out);
+  for (const extension of input.extensions)
+    checkDigest(extension.resourcesSha256, "resource digest", extension.path, out);
+  if (release.engineSha256 !== null) checkDigest(release.engineSha256, "engine digest", "", out);
 
-  const applicationValid = checkSchema("application", input.application);
-  const lockValid = checkSchema("framework-lock", input.lock);
-  for (const document of release.workflows) checkSchema("workflow", document);
-  for (const document of release.templates) checkSchema("template", document);
+  const applicationValid = checkSchema("application", input.application, out);
+  const lockValid = checkSchema("framework-lock", input.lock, out);
+  for (const document of release.workflows) checkSchema("workflow", document, out);
+  for (const document of release.templates) checkSchema("template", document, out);
   for (const extension of input.extensions) {
-    if (!checkSchema("extension", extension.manifest)) continue;
-    const view = extension.manifest.value as ExtensionView;
-    for (const resource of view.resources) {
-      const needsDescriptor =
-        resource.kind === "workflow" || (resource.kind === "template" && isTemplateDescriptorPath(resource.path));
-      const descriptor = extension.descriptors.get(resource.id);
-      if (needsDescriptor && !descriptor) {
-        error(
-          "CONFIG_EXTENSION_RESOURCE_MISSING",
-          `resource ${resource.id} was not loaded`,
-          extension.manifest.origin,
-          "Report this as a defect: the loader must parse every workflow and template descriptor.",
-        );
-      } else if (descriptor) {
-        checkSchema(resource.kind === "workflow" ? "workflow" : "template", descriptor);
-      }
+    if (checkSchema("extension", extension.manifest, out)) checkExtensionDescriptors(extension, out);
+  }
+  return { manifest: releaseCheck.manifest, applicationValid, lockValid };
+}
+
+const compareState = (expected: string, actual: string | null): LockState => {
+  if (actual === null) return "unknown";
+  return expected === actual ? "match" : "mismatch";
+};
+
+/** Step 2a: framework version, engine and core resources against the lock (design doc 03, "Lockfile"). */
+function compareCoreLock(
+  pinned: LockView,
+  lockPath: string,
+  release: ReleaseInput,
+  frameworkVersion: string,
+  out: Findings,
+): [LockState, LockState, LockState] {
+  const framework = compareState(pinned.framework_version, frameworkVersion);
+  const engine = compareState(pinned.engine_sha256, release.engineSha256);
+  const resources = compareState(pinned.resources_sha256, release.resourcesSha256);
+  const remediation = "Install the pinned plugin build, or review and commit a lock update for this one.";
+  if (framework === "mismatch") {
+    out.lockError(
+      "CONFIG_LOCK_FRAMEWORK_MISMATCH",
+      `the lock pins framework ${pinned.framework_version} but ${frameworkVersion} is running`,
+      pointerPath(lockPath, "/framework_version"),
+      "Install the pinned plugin version, or review and commit a lock update for the new one.",
+      [`locked: ${pinned.framework_version}`, `running: ${frameworkVersion}`],
+    );
+  }
+  if (engine === "mismatch") {
+    out.lockError(
+      "CONFIG_LOCK_ENGINE_MISMATCH",
+      "the running engine differs from the locked engine",
+      pointerPath(lockPath, "/engine_sha256"),
+      remediation,
+      [`locked: ${pinned.engine_sha256}`, `running: ${release.engineSha256}`],
+    );
+  } else if (engine === "unknown") {
+    out.lock.push(
+      diagnostic("CONFIG_LOCK_ENGINE_UNKNOWN", "warning", "the running engine has no digest to compare with the lock", {
+        path: pointerPath(lockPath, "/engine_sha256"),
+        evidence: ["running from source, not from a built plugin"],
+        remediation: "Run a built plugin to verify the engine. Certified commands refuse to run until it matches.",
+      }),
+    );
+  }
+  if (resources === "mismatch") {
+    out.lockError(
+      "CONFIG_LOCK_RESOURCES_MISMATCH",
+      "the running core resources differ from the locked resources",
+      pointerPath(lockPath, "/resources_sha256"),
+      remediation,
+      [`locked: ${pinned.resources_sha256}`, `running: ${release.resourcesSha256}`],
+    );
+  }
+  return [framework, engine, resources];
+}
+
+/** Step 2b: each loaded extension against its lock tuple, and every tuple against a loaded extension. */
+function compareExtensionLock(
+  pinned: LockView,
+  lockPath: string,
+  extensions: readonly ExtensionInput[],
+  out: Findings,
+): LockState {
+  let state: LockState = "match";
+  const locked = new Map<string, { id: string; version: string; sha256: string }>();
+  for (const [index, tuple] of pinned.extensions_locked.entries()) {
+    if (locked.has(caseFoldKey(tuple.id))) {
+      state = "mismatch";
+      out.lockError(
+        "CONFIG_LOCK_DUPLICATE_EXTENSION",
+        `the lock lists extension ${tuple.id} twice`,
+        pointerPath(lockPath, `/extensions_locked/${index}`),
+        "Keep one entry per extension.",
+      );
+    }
+    locked.set(caseFoldKey(tuple.id), tuple);
+  }
+  const loaded = new Set<string>();
+  for (const extension of extensions) {
+    const view = extension.manifest.value as Partial<ExtensionView>;
+    if (typeof view.id !== "string") continue;
+    loaded.add(caseFoldKey(view.id));
+    const tuple = locked.get(caseFoldKey(view.id));
+    if (!tuple) {
+      state = "mismatch";
+      out.lockError(
+        "CONFIG_EXTENSION_NOT_LOCKED",
+        `extension ${view.id} is not in the lock`,
+        extension.manifest.origin,
+        "Review the extension, then add its ID, version and digest to the lock.",
+        [`digest: ${extension.resourcesSha256}`],
+      );
+    } else if (tuple.id !== view.id || tuple.version !== view.version || tuple.sha256 !== extension.resourcesSha256) {
+      state = "mismatch";
+      out.lockError(
+        "CONFIG_EXTENSION_LOCK_MISMATCH",
+        `extension ${view.id} differs from its lock entry`,
+        extension.manifest.origin,
+        "Restore the reviewed extension files, or review the change and update the lock entry.",
+        [
+          `locked: ${tuple.id} ${tuple.version} ${tuple.sha256}`,
+          `found: ${view.id} ${String(view.version)} ${extension.resourcesSha256}`,
+        ],
+      );
     }
   }
-
-  // 2. Lock: compare what the application pinned with what is actually running (design doc 03, "Lockfile").
-  let lock: LockReport | null = null;
-  const manifest = releaseCheck.manifest;
-  if (lockValid && manifest) {
-    const pinned = input.lock.value as LockView;
-    const lockPath = input.lock.origin;
-    const compare = (expected: string, actual: string | null): LockState =>
-      actual === null ? "unknown" : expected === actual ? "match" : "mismatch";
-    const frameworkState = compare(pinned.framework_version, manifest.framework_version);
-    const engineState = compare(pinned.engine_sha256, release.engineSha256);
-    const resourcesState = compare(pinned.resources_sha256, release.resourcesSha256);
-    if (frameworkState === "mismatch") {
-      lockError(
-        "CONFIG_LOCK_FRAMEWORK_MISMATCH",
-        `the lock pins framework ${pinned.framework_version} but ${manifest.framework_version} is running`,
-        pointerPath(lockPath, "/framework_version"),
-        "Install the pinned plugin version, or review and commit a lock update for the new one.",
-        [`locked: ${pinned.framework_version}`, `running: ${manifest.framework_version}`],
-      );
-    }
-    if (engineState === "mismatch") {
-      lockError(
-        "CONFIG_LOCK_ENGINE_MISMATCH",
-        "the running engine differs from the locked engine",
-        pointerPath(lockPath, "/engine_sha256"),
-        "Install the pinned plugin build, or review and commit a lock update for this one.",
-        [`locked: ${pinned.engine_sha256}`, `running: ${release.engineSha256}`],
-      );
-    } else if (engineState === "unknown") {
-      lockDiagnostics.push(
-        diagnostic(
-          "CONFIG_LOCK_ENGINE_UNKNOWN",
-          "warning",
-          "the running engine has no digest to compare with the lock",
-          {
-            path: pointerPath(lockPath, "/engine_sha256"),
-            evidence: ["running from source, not from a built plugin"],
-            remediation: "Run a built plugin to verify the engine. Certified commands refuse to run until it matches.",
-          },
-        ),
-      );
-    }
-    if (resourcesState === "mismatch") {
-      lockError(
-        "CONFIG_LOCK_RESOURCES_MISMATCH",
-        "the running core resources differ from the locked resources",
-        pointerPath(lockPath, "/resources_sha256"),
-        "Install the pinned plugin build, or review and commit a lock update for this one.",
-        [`locked: ${pinned.resources_sha256}`, `running: ${release.resourcesSha256}`],
-      );
-    }
-
-    let extensionsState: LockState = "match";
-    const locked = new Map<string, { id: string; version: string; sha256: string }>();
-    pinned.extensions_locked.forEach((tuple, index) => {
-      if (locked.has(caseFoldKey(tuple.id))) {
-        extensionsState = "mismatch";
-        lockError(
-          "CONFIG_LOCK_DUPLICATE_EXTENSION",
-          `the lock lists extension ${tuple.id} twice`,
-          pointerPath(lockPath, `/extensions_locked/${index}`),
-          "Keep one entry per extension.",
-        );
-      }
-      locked.set(caseFoldKey(tuple.id), tuple);
-    });
-    const loaded = new Set<string>();
-    for (const extension of input.extensions) {
-      const view = extension.manifest.value as Partial<ExtensionView>;
-      if (typeof view.id !== "string") continue;
-      loaded.add(caseFoldKey(view.id));
-      const tuple = locked.get(caseFoldKey(view.id));
-      const where = extension.manifest.origin;
-      if (!tuple) {
-        extensionsState = "mismatch";
-        lockError(
-          "CONFIG_EXTENSION_NOT_LOCKED",
-          `extension ${view.id} is not in the lock`,
-          where,
-          "Review the extension, then add its ID, version and digest to the lock.",
-          [`digest: ${extension.resourcesSha256}`],
-        );
-        continue;
-      }
-      if (tuple.id !== view.id || tuple.version !== view.version || tuple.sha256 !== extension.resourcesSha256) {
-        extensionsState = "mismatch";
-        lockError(
-          "CONFIG_EXTENSION_LOCK_MISMATCH",
-          `extension ${view.id} differs from its lock entry`,
-          where,
-          "Restore the reviewed extension files, or review the change and update the lock entry.",
-          [
-            `locked: ${tuple.id} ${tuple.version} ${tuple.sha256}`,
-            `found: ${view.id} ${String(view.version)} ${extension.resourcesSha256}`,
-          ],
-        );
-      }
-    }
-    for (const [key, tuple] of locked) {
-      if (!loaded.has(key)) {
-        extensionsState = "mismatch";
-        lockError(
-          "CONFIG_EXTENSION_LOCK_UNUSED",
-          `the lock pins extension ${tuple.id}, but the application doesn't load it`,
-          lockPath,
-          "Add the extension's folder to extension_paths, or remove it from the lock in a reviewed change.",
-        );
-      }
-    }
-    lock = {
-      ok: [frameworkState, engineState, resourcesState, extensionsState].every((state) => state === "match"),
-      framework_version: frameworkState,
-      engine: engineState,
-      resources: resourcesState,
-      extensions: extensionsState,
-    };
+  for (const [key, tuple] of locked) {
+    if (loaded.has(key)) continue;
+    state = "mismatch";
+    out.lockError(
+      "CONFIG_EXTENSION_LOCK_UNUSED",
+      `the lock pins extension ${tuple.id}, but the application doesn't load it`,
+      lockPath,
+      "Add the extension's folder to extension_paths, or remove it from the lock in a reviewed change.",
+    );
   }
+  return state;
+}
 
-  if (hasErrors(diagnostics) || !manifest || !applicationValid || !lockValid) return fail(lock);
+/** Step 2: compare what the application pinned with what is actually running. */
+function compareLock(input: ResolveInput, frameworkVersion: string, out: Findings): LockReport {
+  const pinned = input.lock.value as LockView;
+  const [framework, engine, resources] = compareCoreLock(
+    pinned,
+    input.lock.origin,
+    input.release,
+    frameworkVersion,
+    out,
+  );
+  const extensions = compareExtensionLock(pinned, input.lock.origin, input.extensions, out);
+  return {
+    ok: [framework, engine, resources, extensions].every((state) => state === "match"),
+    framework_version: framework,
+    engine,
+    resources,
+    extensions,
+  };
+}
 
-  const application = input.application.value as ApplicationView;
-  const appPath = input.application.origin;
-
-  // 3. Extensions: unique IDs, compatible framework range, dependencies present and acyclic.
-  const extensionViews = input.extensions.map((extension) => ({
-    input: extension,
-    view: extension.manifest.value as ExtensionView,
-  }));
-  const extensionById = new Map<string, (typeof extensionViews)[number]>();
-  for (const entry of extensionViews) {
-    const key = caseFoldKey(entry.view.id);
-    const existing = extensionById.get(key);
+/** Step 3: unique extension IDs, compatible framework ranges, dependencies present and acyclic. */
+function orderExtensions(
+  entries: readonly ExtensionEntry[],
+  frameworkVersion: string,
+  appPath: string,
+  out: Findings,
+): Map<string, ExtensionEntry> | null {
+  const byId = new Map<string, ExtensionEntry>();
+  for (const entry of entries) {
+    const existing = byId.get(caseFoldKey(entry.view.id));
     if (existing) {
-      error(
+      out.error(
         "CONFIG_DUPLICATE_ID",
         `extension ID ${entry.view.id} is used by two extensions`,
         entry.input.manifest.origin,
@@ -561,165 +614,183 @@ export function resolveEffectiveConfig(input: ResolveInput): ResolveResult {
         [existing.input.manifest.origin],
       );
     }
-    extensionById.set(key, entry);
+    byId.set(caseFoldKey(entry.view.id), entry);
+    const where = pointerPath(entry.input.manifest.origin, "/framework_range");
     const range = entry.view.framework_range;
     if (!parseRange(range)) {
-      error(
+      out.error(
         "CONFIG_EXTENSION_RANGE_INVALID",
         `framework_range ${JSON.stringify(range)} is not supported`,
-        pointerPath(entry.input.manifest.origin, "/framework_range"),
+        where,
         'Use comparators such as ">=0.1.0 <0.2.0".',
       );
-    } else if (!satisfiesRange(manifest.framework_version, range)) {
-      error(
+    } else if (!satisfiesRange(frameworkVersion, range)) {
+      out.error(
         "CONFIG_EXTENSION_INCOMPATIBLE",
-        `extension ${entry.view.id} supports framework ${range}, not ${manifest.framework_version}`,
-        pointerPath(entry.input.manifest.origin, "/framework_range"),
+        `extension ${entry.view.id} supports framework ${range}, not ${frameworkVersion}`,
+        where,
         "Use an extension version built for this framework version.",
       );
     }
   }
-  for (const entry of extensionViews) {
-    for (const required of entry.view.requires) {
-      if (!extensionById.has(caseFoldKey(required))) {
-        error(
-          "CONFIG_EXTENSION_DEPENDENCY_MISSING",
-          `extension ${entry.view.id} requires ${required}, which is not loaded`,
-          pointerPath(entry.input.manifest.origin, "/requires"),
-          "Add the required extension to extension_paths and the lock.",
-        );
-      }
+  for (const entry of entries) {
+    for (const required of entry.view.requires.filter((id) => !byId.has(caseFoldKey(id)))) {
+      out.error(
+        "CONFIG_EXTENSION_DEPENDENCY_MISSING",
+        `extension ${entry.view.id} requires ${required}, which is not loaded`,
+        pointerPath(entry.input.manifest.origin, "/requires"),
+        "Add the required extension to extension_paths and the lock.",
+      );
     }
   }
-  if (hasErrors(diagnostics)) return fail(lock);
-  const order = topologicalOrder(extensionViews.map((entry) => entry.view));
+  if (out.failed) return null;
+  const order = topologicalOrder(entries.map((entry) => entry.view));
   if (!order) {
-    error(
+    out.error(
       "CONFIG_EXTENSION_CYCLE",
       "extensions require each other in a cycle",
       appPath,
       "Remove the circular requires entries.",
-      extensionViews.map((entry) => `${entry.view.id} requires ${entry.view.requires.join(", ") || "nothing"}`),
+      entries.map((entry) => `${entry.view.id} requires ${entry.view.requires.join(", ") || "nothing"}`),
     );
-    return fail(lock);
+    return null;
   }
+  return new Map(order.map((id) => [id, byId.get(caseFoldKey(id)) as ExtensionEntry]));
+}
 
-  // 4. Registries. IDs are unique ignoring case; there is no override (design doc 06).
-  const artifactTypes = new Map<string, { id: string; origin: SourceDocument }>();
-  const ruleIds = new Map<string, string>();
-  const workflows = new Map<string, { document: SourceDocument; view: WorkflowView }>();
-  const templates = new Map<string, { document: SourceDocument; view: TemplateView }>();
-  /** Every selectable template, including extension Markdown templates that have no descriptor. */
-  const templateTypes = new Map<string, { id: string; artifactType: string; path: string }>();
-  const resourceIds = new Map<string, string>();
-
-  const register = <T>(registry: Map<string, T>, id: string, value: T, label: string, path: string): boolean => {
-    if (registry.has(caseFoldKey(id))) {
-      error(
-        "CONFIG_DUPLICATE_ID",
-        `${label} ${id} is defined twice`,
-        path,
-        `Rename one of the ${label}s; nothing can override another.`,
-      );
-      return false;
-    }
-    registry.set(caseFoldKey(id), value);
-    return true;
-  };
-
-  for (const type of manifest.artifact_types)
-    register(artifactTypes, type, { id: type, origin: release.manifest }, "artifact type", release.manifest.origin);
-  for (const rule of manifest.core_rule_ids) register(ruleIds, rule, rule, "rule", release.manifest.origin);
+/** Registers the release's built-in definitions. */
+function registerCore(release: ReleaseInput, manifest: ReleaseManifest, registries: Registries, out: Findings): void {
+  const origin = release.manifest.origin;
+  for (const type of manifest.artifact_types) {
+    register(registries.artifactTypes, type, { id: type, origin: release.manifest }, "artifact type", origin, out);
+  }
+  for (const rule of manifest.core_rule_ids) register(registries.ruleIds, rule, rule, "rule", origin, out);
   for (const document of release.workflows) {
     const view = document.value as WorkflowView;
-    register(workflows, view.id, { document, view }, "workflow", document.origin);
+    register(registries.workflows, view.id, { document, view }, "workflow", document.origin, out);
   }
   for (const document of release.templates) {
     const view = document.value as TemplateView;
-    if (register(templates, view.id, { document, view }, "template", document.origin)) {
-      templateTypes.set(caseFoldKey(view.id), { id: view.id, artifactType: view.artifact_type, path: document.origin });
+    if (register(registries.templates, view.id, { document, view }, "template", document.origin, out)) {
+      registries.templateTypes.set(caseFoldKey(view.id), {
+        id: view.id,
+        artifactType: view.artifact_type,
+        path: document.origin,
+      });
     }
   }
+}
 
-  for (const id of order) {
-    const entry = extensionById.get(caseFoldKey(id));
-    if (!entry) continue;
-    const { input: extension, view } = entry;
-    const origin = extension.manifest.origin;
-    view.resources.forEach((resource, index) => {
-      const where = pointerPath(origin, `/resources/${index}`);
-      register(resourceIds, resource.id, resource.id, "extension resource", where);
-      const descriptor = extension.descriptors.get(resource.id);
-      if (resource.kind === "artifact_type") {
-        register(artifactTypes, resource.id, { id: resource.id, origin: extension.manifest }, "artifact type", where);
-      } else if (resource.kind === "workflow" && descriptor) {
-        const workflow = descriptor.value as WorkflowView;
-        if (workflow.id !== resource.id) {
-          error(
-            "CONFIG_EXTENSION_RESOURCE_ID",
-            `workflow descriptor ID ${workflow.id} differs from resource ID ${resource.id}`,
-            where,
-            "Use the same ID in both places.",
-          );
-        }
-        register(workflows, workflow.id, { document: descriptor, view: workflow }, "workflow", where);
-      } else if (resource.kind === "template") {
-        if (descriptor) {
-          // A template descriptor joins the `templates` registry.
-          const template = descriptor.value as TemplateView;
-          if (template.id !== resource.id) {
-            error(
-              "CONFIG_EXTENSION_RESOURCE_ID",
-              `template descriptor ID ${template.id} differs from resource ID ${resource.id}`,
-              where,
-              "Use the same ID in both places.",
-            );
-          }
-          if (resource.artifact_type !== undefined && resource.artifact_type !== template.artifact_type) {
-            error(
-              "CONFIG_EXTENSION_RESOURCE_ID",
-              `template ${resource.id} names two different artifact types`,
-              where,
-              "Use the same artifact type in the manifest and the descriptor.",
-            );
-          }
-          if (register(templates, template.id, { document: descriptor, view: template }, "template", where)) {
-            templateTypes.set(caseFoldKey(template.id), {
-              id: template.id,
-              artifactType: template.artifact_type,
-              path: where,
-            });
-          }
-        } else if (resource.artifact_type === undefined) {
-          error(
-            "CONFIG_EXTENSION_TEMPLATE_TYPE",
-            `template ${resource.id} doesn't name an artifact type`,
-            where,
-            "Add artifact_type to the template resource.",
-          );
-        } else {
-          // A Markdown template has no descriptor; it is selectable, and stays in its extension's manifest.
-          // Its headings are checked by the rule engine (B07), which parses Markdown.
-          register(
-            templateTypes,
-            resource.id,
-            { id: resource.id, artifactType: resource.artifact_type, path: where },
-            "template",
-            where,
-          );
-        }
-      }
-    });
-    view.rules.forEach((rule, index) => {
-      register(ruleIds, rule.id, rule.id, "rule", pointerPath(origin, `/rules/${index}`));
+/** Registers one extension template: a descriptor joins `templates`; a Markdown template is only selectable. */
+function registerExtensionTemplate(
+  resource: ExtensionResource,
+  descriptor: SourceDocument | undefined,
+  where: string,
+  registries: Registries,
+  out: Findings,
+): void {
+  if (!descriptor) {
+    if (resource.artifact_type === undefined) {
+      out.error(
+        "CONFIG_EXTENSION_TEMPLATE_TYPE",
+        `template ${resource.id} doesn't name an artifact type`,
+        where,
+        "Add artifact_type to the template resource.",
+      );
+      return;
+    }
+    // Its headings are checked by the rule engine (B07), which parses Markdown.
+    const entry = { id: resource.id, artifactType: resource.artifact_type, path: where };
+    register(registries.templateTypes, resource.id, entry, "template", where, out);
+    return;
+  }
+  const template = descriptor.value as TemplateView;
+  if (template.id !== resource.id) {
+    out.error(
+      "CONFIG_EXTENSION_RESOURCE_ID",
+      `template descriptor ID ${template.id} differs from resource ID ${resource.id}`,
+      where,
+      "Use the same ID in both places.",
+    );
+  }
+  if (resource.artifact_type !== undefined && resource.artifact_type !== template.artifact_type) {
+    out.error(
+      "CONFIG_EXTENSION_RESOURCE_ID",
+      `template ${resource.id} names two different artifact types`,
+      where,
+      "Use the same artifact type in the manifest and the descriptor.",
+    );
+  }
+  if (register(registries.templates, template.id, { document: descriptor, view: template }, "template", where, out)) {
+    registries.templateTypes.set(caseFoldKey(template.id), {
+      id: template.id,
+      artifactType: template.artifact_type,
+      path: where,
     });
   }
+}
 
-  // 5. References between registries and from the application.
-  const knownType = (type: string): boolean => artifactTypes.get(caseFoldKey(type))?.id === type;
-  for (const [, template] of templateTypes) {
-    if (!knownType(template.artifactType)) {
-      error(
+/** Registers one extension's resources and rules. */
+function registerExtension({ input: extension, view }: ExtensionEntry, registries: Registries, out: Findings): void {
+  const origin = extension.manifest.origin;
+  for (const [index, resource] of view.resources.entries()) {
+    const where = pointerPath(origin, `/resources/${index}`);
+    register(registries.resourceIds, resource.id, resource.id, "extension resource", where, out);
+    const descriptor = extension.descriptors.get(resource.id);
+    if (resource.kind === "artifact_type") {
+      register(
+        registries.artifactTypes,
+        resource.id,
+        { id: resource.id, origin: extension.manifest },
+        "artifact type",
+        where,
+        out,
+      );
+    } else if (resource.kind === "workflow" && descriptor) {
+      const workflow = descriptor.value as WorkflowView;
+      if (workflow.id !== resource.id) {
+        out.error(
+          "CONFIG_EXTENSION_RESOURCE_ID",
+          `workflow descriptor ID ${workflow.id} differs from resource ID ${resource.id}`,
+          where,
+          "Use the same ID in both places.",
+        );
+      }
+      register(registries.workflows, workflow.id, { document: descriptor, view: workflow }, "workflow", where, out);
+    } else if (resource.kind === "template") {
+      registerExtensionTemplate(resource, descriptor, where, registries, out);
+    }
+  }
+  for (const [index, rule] of view.rules.entries()) {
+    register(registries.ruleIds, rule.id, rule.id, "rule", pointerPath(origin, `/rules/${index}`), out);
+  }
+}
+
+/** Step 4: registries. */
+function buildRegistries(
+  input: ResolveInput,
+  manifest: ReleaseManifest,
+  ordered: ReadonlyMap<string, ExtensionEntry>,
+  out: Findings,
+): Registries {
+  const registries: Registries = {
+    artifactTypes: new Map(),
+    ruleIds: new Map(),
+    workflows: new Map(),
+    templates: new Map(),
+    templateTypes: new Map(),
+    resourceIds: new Map(),
+  };
+  registerCore(input.release, manifest, registries, out);
+  for (const entry of ordered.values()) registerExtension(entry, registries, out);
+  return registries;
+}
+
+/** Step 5a: templates and extension rules name registered artifact types. */
+function checkRegisteredTypes(entries: readonly ExtensionEntry[], registries: Registries, out: Findings): void {
+  for (const template of registries.templateTypes.values()) {
+    if (!knownType(registries, template.artifactType)) {
+      out.error(
         "CONFIG_UNKNOWN_ARTIFACT_TYPE",
         `template ${template.id} is for unknown artifact type ${template.artifactType}`,
         template.path,
@@ -727,34 +798,35 @@ export function resolveEffectiveConfig(input: ResolveInput): ResolveResult {
       );
     }
   }
-  for (const entry of extensionViews) {
-    entry.view.rules.forEach((rule, index) => {
-      if (!knownType(rule.artifact_type)) {
-        error(
-          "CONFIG_UNKNOWN_ARTIFACT_TYPE",
-          `rule ${rule.id} is for unknown artifact type ${rule.artifact_type}`,
-          pointerPath(entry.input.manifest.origin, `/rules/${index}/artifact_type`),
-          "Register the artifact type, or fix the rule.",
-        );
-      }
-    });
+  for (const entry of entries) {
+    for (const [index, rule] of entry.view.rules.entries()) {
+      if (knownType(registries, rule.artifact_type)) continue;
+      out.error(
+        "CONFIG_UNKNOWN_ARTIFACT_TYPE",
+        `rule ${rule.id} is for unknown artifact type ${rule.artifact_type}`,
+        pointerPath(entry.input.manifest.origin, `/rules/${index}/artifact_type`),
+        "Register the artifact type, or fix the rule.",
+      );
+    }
   }
+}
 
-  const repositoryIds = new Map<string, number>();
-  application.repositories.forEach((repository, index) => {
-    const key = caseFoldKey(repository.id);
-    if (repositoryIds.has(key)) {
-      error(
+/** Step 5b: repositories and capabilities are unique; the design repository is one of them. */
+function checkRepositoriesAndCapabilities(application: ApplicationView, appPath: string, out: Findings): Set<string> {
+  const repositoryIds = new Set<string>();
+  for (const [index, repository] of application.repositories.entries()) {
+    if (repositoryIds.has(caseFoldKey(repository.id))) {
+      out.error(
         "CONFIG_DUPLICATE_ID",
         `repository ${repository.id} is listed twice`,
         pointerPath(appPath, `/repositories/${index}/id`),
         "Give each repository a unique ID.",
       );
     }
-    repositoryIds.set(key, (repositoryIds.get(key) ?? 0) + 1);
-  });
+    repositoryIds.add(caseFoldKey(repository.id));
+  }
   if (!application.repositories.some((repository) => repository.id === application.design_repository_id)) {
-    error(
+    out.error(
       "CONFIG_DESIGN_REPOSITORY",
       `design_repository_id ${application.design_repository_id} doesn't match a configured repository`,
       pointerPath(appPath, "/design_repository_id"),
@@ -762,9 +834,9 @@ export function resolveEffectiveConfig(input: ResolveInput): ResolveResult {
     );
   }
   const capabilityIds = new Set<string>();
-  application.capabilities.forEach((capability, index) => {
+  for (const [index, capability] of application.capabilities.entries()) {
     if (capabilityIds.has(capability.id)) {
-      error(
+      out.error(
         "CONFIG_DUPLICATE_ID",
         `capability ${capability.id} is listed twice`,
         pointerPath(appPath, `/capabilities/${index}/id`),
@@ -772,30 +844,37 @@ export function resolveEffectiveConfig(input: ResolveInput): ResolveResult {
       );
     }
     capabilityIds.add(capability.id);
-  });
+  }
+  return capabilityIds;
+}
+
+/** Step 5c: review roles and required artifact types resolve (design doc 16). */
+function checkPolicy(application: ApplicationView, appPath: string, registries: Registries, out: Findings): void {
   const roles = new Set(Object.keys(application.reviewer_roles));
-  application.required_review_roles.forEach((role, index) => {
-    if (!roles.has(role)) {
-      error(
-        "CONFIG_REVIEW_ROLE_UNKNOWN",
-        `required review role ${role} is not defined in reviewer_roles`,
-        pointerPath(appPath, `/required_review_roles/${index}`),
-        "Define the role in reviewer_roles, or remove the requirement.",
-      );
-    }
-  });
-  (application.required_artifact_types ?? []).forEach((type, index) => {
-    if (!knownType(type)) {
-      error(
-        "CONFIG_UNKNOWN_ARTIFACT_TYPE",
-        `required artifact type ${type} is not registered`,
-        pointerPath(appPath, `/required_artifact_types/${index}`),
-        "Use a registered artifact type.",
-      );
-    }
-  });
-  if (workflows.get(caseFoldKey(application.default_workflow))?.view.id !== application.default_workflow) {
-    error(
+  for (const [index, role] of application.required_review_roles.entries()) {
+    if (roles.has(role)) continue;
+    out.error(
+      "CONFIG_REVIEW_ROLE_UNKNOWN",
+      `required review role ${role} is not defined in reviewer_roles`,
+      pointerPath(appPath, `/required_review_roles/${index}`),
+      "Define the role in reviewer_roles, or remove the requirement.",
+    );
+  }
+  for (const [index, type] of (application.required_artifact_types ?? []).entries()) {
+    if (knownType(registries, type)) continue;
+    out.error(
+      "CONFIG_UNKNOWN_ARTIFACT_TYPE",
+      `required artifact type ${type} is not registered`,
+      pointerPath(appPath, `/required_artifact_types/${index}`),
+      "Use a registered artifact type.",
+    );
+  }
+}
+
+/** Step 5d: the default workflow and every template selection resolve. */
+function checkSelections(application: ApplicationView, appPath: string, registries: Registries, out: Findings): void {
+  if (registries.workflows.get(caseFoldKey(application.default_workflow))?.view.id !== application.default_workflow) {
+    out.error(
       "CONFIG_UNKNOWN_WORKFLOW",
       `default workflow ${application.default_workflow} is not registered`,
       pointerPath(appPath, "/default_workflow"),
@@ -804,23 +883,23 @@ export function resolveEffectiveConfig(input: ResolveInput): ResolveResult {
   }
   for (const [type, templateId] of Object.entries(application.template_selections)) {
     const where = pointerPath(appPath, `/template_selections/${pointerToken(type)}`);
-    const template = templateTypes.get(caseFoldKey(templateId));
-    if (!knownType(type)) {
-      error(
+    const template = registries.templateTypes.get(caseFoldKey(templateId));
+    if (!knownType(registries, type)) {
+      out.error(
         "CONFIG_UNKNOWN_ARTIFACT_TYPE",
         `template selection for unknown artifact type ${type}`,
         where,
         "Select templates for registered artifact types only.",
       );
-    } else if (!template || template.id !== templateId) {
-      error(
+    } else if (template?.id !== templateId) {
+      out.error(
         "CONFIG_UNKNOWN_TEMPLATE",
         `selected template ${templateId} is not registered`,
         where,
         "Select a core template or one an extension registers.",
       );
     } else if (template.artifactType !== type) {
-      error(
+      out.error(
         "CONFIG_TEMPLATE_TYPE_MISMATCH",
         `template ${templateId} is for ${template.artifactType}, not ${type}`,
         where,
@@ -828,86 +907,104 @@ export function resolveEffectiveConfig(input: ResolveInput): ResolveResult {
       );
     }
   }
+}
 
-  // 6. Workflow graphs (design doc 16): unique steps, known predecessors, acyclic, resolvable references.
-  for (const [, { document, view }] of workflows) {
-    const steps = new Map<string, (typeof view.steps)[number]>();
-    view.steps.forEach((step, index) => {
-      const where = pointerPath(document.origin, `/steps/${index}`);
-      if (steps.has(step.id))
-        error(
+type WorkflowStep = WorkflowView["steps"][number];
+
+interface StepContext {
+  workflowId: string;
+  steps: ReadonlyMap<string, WorkflowStep>;
+  registries: Registries;
+  capabilityIds: ReadonlySet<string>;
+  roles: ReadonlySet<string>;
+}
+
+/** One step's references: predecessors, outputs, rules, capabilities and reviewer roles. */
+function checkStep(step: WorkflowStep, where: (field: string) => string, context: StepContext, out: Findings): void {
+  for (const predecessor of step.after.filter((id) => !context.steps.has(id))) {
+    out.error(
+      "CONFIG_WORKFLOW_INVALID",
+      `step ${step.id} comes after unknown step ${predecessor}`,
+      where("after"),
+      "Name existing steps only.",
+    );
+  }
+  for (const output of step.required_outputs) {
+    if (BUILT_IN_OUTPUT_KINDS.includes(output) || knownType(context.registries, output)) continue;
+    out.error(
+      "CONFIG_UNKNOWN_ARTIFACT_TYPE",
+      `step ${step.id} requires unknown output ${output}`,
+      where("required_outputs"),
+      "Use a registered artifact type, baseline or handoff.",
+    );
+  }
+  for (const rule of step.blocking_rules.filter((id) => context.registries.ruleIds.get(caseFoldKey(id)) !== id)) {
+    out.error(
+      "CONFIG_UNKNOWN_RULE",
+      `step ${step.id} names unknown rule ${rule}`,
+      where("blocking_rules"),
+      "Use a core rule or one an extension adds.",
+    );
+  }
+  for (const capability of step.capabilities.filter((id) => !context.capabilityIds.has(id))) {
+    out.error(
+      "CONFIG_UNKNOWN_CAPABILITY",
+      `step ${step.id} of workflow ${context.workflowId} uses capability ${capability}, which the application doesn't define`,
+      where("capabilities"),
+      "Define the capability in the application profile.",
+    );
+  }
+  for (const role of step.reviewer_roles.filter((id) => !context.roles.has(id))) {
+    out.error(
+      "CONFIG_REVIEW_ROLE_UNKNOWN",
+      `step ${step.id} names undefined reviewer role ${role}`,
+      where("reviewer_roles"),
+      "Define the role in reviewer_roles.",
+    );
+  }
+}
+
+/** True when `after` edges form a cycle. */
+function hasStepCycle(steps: ReadonlyMap<string, WorkflowStep>): boolean {
+  const state = new Map<string, "visiting" | "done">();
+  const visit = (id: string): boolean => {
+    if (state.get(id) === "done") return false;
+    if (state.get(id) === "visiting") return true;
+    state.set(id, "visiting");
+    const cyclic = (steps.get(id)?.after ?? []).some((next) => steps.has(next) && visit(next));
+    state.set(id, "done");
+    return cyclic;
+  };
+  return [...steps.keys()].some((id) => visit(id));
+}
+
+/** Step 6: workflow graphs (design doc 16): unique steps, known references, acyclic. */
+function checkWorkflows(
+  application: ApplicationView,
+  registries: Registries,
+  capabilityIds: ReadonlySet<string>,
+  out: Findings,
+): void {
+  const roles = new Set(Object.keys(application.reviewer_roles));
+  for (const { document, view } of registries.workflows.values()) {
+    const steps = new Map<string, WorkflowStep>();
+    for (const [index, step] of view.steps.entries()) {
+      if (steps.has(step.id)) {
+        out.error(
           "CONFIG_WORKFLOW_INVALID",
           `workflow ${view.id} has two steps named ${step.id}`,
-          where,
+          pointerPath(document.origin, `/steps/${index}`),
           "Give each step a unique ID.",
         );
+      }
       steps.set(step.id, step);
-    });
-    view.steps.forEach((step, index) => {
-      const where = (field: string): string => pointerPath(document.origin, `/steps/${index}/${field}`);
-      for (const predecessor of step.after) {
-        if (!steps.has(predecessor)) {
-          error(
-            "CONFIG_WORKFLOW_INVALID",
-            `step ${step.id} comes after unknown step ${predecessor}`,
-            where("after"),
-            "Name existing steps only.",
-          );
-        }
-      }
-      for (const output of step.required_outputs) {
-        if (!BUILT_IN_OUTPUT_KINDS.includes(output) && !knownType(output)) {
-          error(
-            "CONFIG_UNKNOWN_ARTIFACT_TYPE",
-            `step ${step.id} requires unknown output ${output}`,
-            where("required_outputs"),
-            "Use a registered artifact type, baseline or handoff.",
-          );
-        }
-      }
-      for (const rule of step.blocking_rules) {
-        if (ruleIds.get(caseFoldKey(rule)) !== rule) {
-          error(
-            "CONFIG_UNKNOWN_RULE",
-            `step ${step.id} names unknown rule ${rule}`,
-            where("blocking_rules"),
-            "Use a core rule or one an extension adds.",
-          );
-        }
-      }
-      for (const capability of step.capabilities) {
-        if (!capabilityIds.has(capability)) {
-          error(
-            "CONFIG_UNKNOWN_CAPABILITY",
-            `step ${step.id} of workflow ${view.id} uses capability ${capability}, which the application doesn't define`,
-            where("capabilities"),
-            "Define the capability in the application profile.",
-          );
-        }
-      }
-      for (const role of step.reviewer_roles) {
-        if (!roles.has(role)) {
-          error(
-            "CONFIG_REVIEW_ROLE_UNKNOWN",
-            `step ${step.id} names undefined reviewer role ${role}`,
-            where("reviewer_roles"),
-            "Define the role in reviewer_roles.",
-          );
-        }
-      }
-    });
-    // Depth-first search for a cycle through `after` edges.
-    const state = new Map<string, "visiting" | "done">();
-    const visit = (id: string): boolean => {
-      if (state.get(id) === "done") return false;
-      if (state.get(id) === "visiting") return true;
-      state.set(id, "visiting");
-      const cyclic = (steps.get(id)?.after ?? []).some((next) => steps.has(next) && visit(next));
-      state.set(id, "done");
-      return cyclic;
-    };
-    if ([...steps.keys()].some((id) => visit(id))) {
-      error(
+    }
+    const context: StepContext = { workflowId: view.id, steps, registries, capabilityIds, roles };
+    for (const [index, step] of view.steps.entries()) {
+      checkStep(step, (field) => pointerPath(document.origin, `/steps/${index}/${field}`), context, out);
+    }
+    if (hasStepCycle(steps)) {
+      out.error(
         "CONFIG_WORKFLOW_INVALID",
         `workflow ${view.id} has a cycle in its steps`,
         document.origin,
@@ -915,26 +1012,31 @@ export function resolveEffectiveConfig(input: ResolveInput): ResolveResult {
       );
     }
   }
+}
 
-  if (hasErrors(diagnostics)) return fail(lock);
-
-  // 7. Build the envelope. Registries are ordered by ID; application arrays keep their order.
+/** Step 7: the envelope. Registries are ordered by ID; application arrays keep their order. */
+function buildEnvelope(
+  input: ResolveInput,
+  manifest: ReleaseManifest,
+  registries: Registries,
+  entries: readonly ExtensionEntry[],
+): EffectiveConfigEnvelope {
   const byId = <T extends { id: string }>(a: T, b: T): number => compareCodePoints(a.id, b.id);
   const provenance: ProvenanceEntry[] = [];
   const trace = (pointer: string, document: SourceDocument): void => {
     provenance.push({ pointer, origin: document.origin, sha256: document.sha256 });
   };
 
-  const typeList = [...artifactTypes.values()].sort(byId);
+  const typeList = [...registries.artifactTypes.values()].sort(byId);
   const ruleList = manifest.core_rule_ids.slice().sort(compareCodePoints);
-  const workflowList = [...workflows.values()].sort((a, b) => byId(a.view, b.view));
-  const templateList = [...templates.values()].sort((a, b) => byId(a.view, b.view));
-  const extensionList = extensionViews.slice().sort((a, b) => byId(a.view, b.view));
+  const workflowList = [...registries.workflows.values()].sort((a, b) => byId(a.view, b.view));
+  const templateList = [...registries.templates.values()].sort((a, b) => byId(a.view, b.view));
+  const extensionList = entries.slice().sort((a, b) => byId(a.view, b.view));
 
   trace("/application", input.application);
   trace("/framework_lock", input.lock);
   for (const [index, type] of typeList.entries()) trace(`/artifact_types/${index}`, type.origin);
-  for (const index of ruleList.keys()) trace(`/core_rule_ids/${index}`, release.manifest);
+  for (const index of ruleList.keys()) trace(`/core_rule_ids/${index}`, input.release.manifest);
   for (const [index, workflow] of workflowList.entries()) trace(`/workflows/${index}`, workflow.document);
   for (const [index, template] of templateList.entries()) trace(`/templates/${index}`, template.document);
   if (extensionList.length === 0) trace("/extensions", input.application);
@@ -949,16 +1051,45 @@ export function resolveEffectiveConfig(input: ResolveInput): ResolveResult {
     templates: templateList.map((template) => template.document.value as JsonObject),
     extensions: extensionList.map((extension) => extension.input.manifest.value as JsonObject),
   });
-  const envelope: EffectiveConfigEnvelope = {
-    schema_version: EFFECTIVE_CONFIG_SCHEMA_VERSION,
-    configuration,
-    provenance,
-  };
+  return { schema_version: EFFECTIVE_CONFIG_SCHEMA_VERSION, configuration, provenance };
+}
 
+/** Resolves the effective configuration. Never throws for bad input; problems become diagnostics. */
+export function resolveEffectiveConfig(input: ResolveInput): ResolveResult {
+  const out = new Findings();
+  const fail = (lock: LockReport | null): ResolveResult => ({
+    envelope: null,
+    digest: null,
+    lock,
+    diagnostics: out.all(),
+  });
+
+  const { manifest, applicationValid, lockValid } = checkInputs(input, out);
+  const lock = lockValid && manifest ? compareLock(input, manifest.framework_version, out) : null;
+  if (out.failed || !manifest || !applicationValid || !lockValid) return fail(lock);
+
+  const application = input.application.value as ApplicationView;
+  const appPath = input.application.origin;
+  const entries = input.extensions.map((extension) => ({
+    input: extension,
+    view: extension.manifest.value as ExtensionView,
+  }));
+  const ordered = orderExtensions(entries, manifest.framework_version, appPath, out);
+  if (!ordered) return fail(lock);
+
+  const registries = buildRegistries(input, manifest, ordered, out);
+  checkRegisteredTypes(entries, registries, out);
+  const capabilityIds = checkRepositoriesAndCapabilities(application, appPath, out);
+  checkPolicy(application, appPath, registries, out);
+  checkSelections(application, appPath, registries, out);
+  checkWorkflows(application, registries, capabilityIds, out);
+  if (out.failed) return fail(lock);
+
+  const envelope = buildEnvelope(input, manifest, registries, entries);
   const check = validateAgainstSchema("effective-config", envelope);
   if (!check.valid) {
     for (const issue of check.issues) {
-      error(
+      out.error(
         "CONFIG_INTERNAL",
         `resolved configuration is invalid: ${issue.message}`,
         issue.instancePath,
@@ -967,11 +1098,5 @@ export function resolveEffectiveConfig(input: ResolveInput): ResolveResult {
     }
     return fail(lock);
   }
-
-  return {
-    envelope: deepFreeze(envelope),
-    digest: effectiveConfigDigest(envelope),
-    lock,
-    diagnostics: sortDiagnostics([...diagnostics, ...lockDiagnostics]),
-  };
+  return { envelope: deepFreeze(envelope), digest: effectiveConfigDigest(envelope), lock, diagnostics: out.all() };
 }
