@@ -8,10 +8,16 @@
  * - refuses case-fold collisions with existing entries;
  * - writes atomically through a temporary sibling, then a hard link (new files) or rename
  *   (replacements), so readers never see a partial file;
- * - refuses to overwrite unless the caller supplies the expected SHA-256 of the current bytes.
+ * - publishes through the validated real folder, not the caller's path, and re-checks that folder
+ *   just before and after publishing;
+ * - refuses to overwrite unless the caller supplies the expected SHA-256 of the current bytes;
+ * - serializes writes to the same file within this process, so two callers that expect the same
+ *   digest can't both succeed.
  *
- * The expected-digest check and the final rename are separate steps, so this guards against
- * stale writes, not against two writers racing in the same instant.
+ * Limits: Node has no openat/renameat, so another process that swaps a folder for a symlink in the
+ * instant between the re-check and the publish can still redirect a write. The same goes for two
+ * processes writing one file at once. Design doc 04 puts concurrent editing in separate worktrees
+ * or checkouts; this adapter detects stale writes, it doesn't arbitrate between processes.
  */
 
 import { randomBytes } from "node:crypto";
@@ -27,7 +33,8 @@ export type SafeFsErrorCode =
   | "not-found"
   | "digest-mismatch"
   | "invalid-digest"
-  | "not-a-file";
+  | "not-a-file"
+  | "unsupported";
 
 export class SafeFsError extends Error {
   override name = "SafeFsError";
@@ -46,8 +53,45 @@ export interface WriteOptions {
   expectedSha256?: string;
 }
 
+function errorCode(error: unknown): string | undefined {
+  return (error as NodeJS.ErrnoException | undefined)?.code;
+}
+
+/** ENOENT, or ENOTDIR when a path runs through a regular file (`file.txt/x`). */
 function isNotFound(error: unknown): boolean {
-  return (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
+  const code = errorCode(error);
+  return code === "ENOENT" || code === "ENOTDIR";
+}
+
+/** Writes to one file, keyed by its case-folded real path, run one at a time in this process. */
+const writeQueue = new Map<string, Promise<void>>();
+
+async function serialized<T>(key: string, run: () => Promise<T>): Promise<T> {
+  const previous = writeQueue.get(key) ?? Promise.resolve();
+  let release = (): void => {};
+  const mine = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const tail = previous.then(() => mine);
+  writeQueue.set(key, tail);
+  await previous;
+  try {
+    return await run();
+  } finally {
+    release();
+    if (writeQueue.get(key) === tail) writeQueue.delete(key);
+  }
+}
+
+/** Flushes a folder entry (a new or renamed file) to disk. Windows can't open folders, so skip it there. */
+async function syncDirectory(directory: string): Promise<void> {
+  if (process.platform === "win32") return;
+  const handle = await open(directory, "r");
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
 }
 
 function isInside(root: string, candidate: string): boolean {
@@ -103,10 +147,21 @@ export class SafeFileSystem {
       throw new SafeFsError("invalid-digest", "expectedSha256 must be 64 lower-case hex characters");
     }
     const normalized = normalizeRelativePath(relativePath);
-    const target = this.resolve(normalized);
-    const parent = await this.ensureDirectory(dirname(target), normalized);
-    await this.assertNoCaseCollision(parent, basename(target), normalized);
+    const name = normalized.slice(normalized.lastIndexOf("/") + 1);
+    const parent = await this.ensureDirectory(dirname(this.resolve(normalized)), normalized);
+    // From here on, use the validated real folder, so an alias folder can't redirect the write.
+    const target = join(parent, name);
+    await serialized(caseFoldKey(target), () => this.publish(parent, target, normalized, bytes, options));
+  }
 
+  private async publish(
+    parent: string,
+    target: string,
+    normalized: string,
+    bytes: Uint8Array,
+    options: WriteOptions,
+  ): Promise<void> {
+    await this.assertNoCaseCollision(parent, basename(target), normalized);
     const current = await this.lstatOrUndefined(target);
     if (current?.isSymbolicLink()) {
       throw new SafeFsError("symlink-target", `${normalized} is a symlink; refusing to write through it`);
@@ -137,25 +192,38 @@ export class SafeFileSystem {
       } finally {
         await handle.close();
       }
+      await this.assertFolderUnchanged(parent, normalized);
       if (options.expectedSha256 === undefined) {
         // link() fails if the target appeared in the meantime, so a new file never replaces another.
         try {
           await link(temp, target);
         } catch (error) {
-          const code = (error as NodeJS.ErrnoException).code;
+          const code = errorCode(error);
           if (code === "EEXIST") throw new SafeFsError("exists", `${normalized} already exists`);
-          if (code !== "EPERM" && code !== "ENOTSUP" && code !== "EOPNOTSUPP") throw error;
-          // File systems without hard links: re-check, then rename. This leaves a tiny race window.
-          if ((await this.lstatOrUndefined(target)) !== undefined) {
-            throw new SafeFsError("exists", `${normalized} already exists`);
+          if (code === "EPERM" || code === "ENOTSUP" || code === "EOPNOTSUPP") {
+            // Without hard links there is no create-only atomic publish; refuse rather than risk
+            // overwriting a file another process created in the meantime.
+            throw new SafeFsError(
+              "unsupported",
+              `${normalized}: this file system has no hard links, so new files can't be created safely`,
+            );
           }
-          await rename(temp, target);
+          throw error;
         }
       } else {
         await rename(temp, target);
       }
+      await syncDirectory(parent);
+      await this.assertFolderUnchanged(parent, normalized);
     } finally {
       await rm(temp, { force: true });
+    }
+  }
+
+  /** Fails if a validated folder no longer resolves to itself (it was replaced by a symlink). */
+  private async assertFolderUnchanged(folder: string, forPath: string): Promise<void> {
+    if ((await realpath(folder)) !== folder) {
+      throw new SafeFsError("outside-root", `${forPath}: its folder changed during the write`);
     }
   }
 
@@ -167,10 +235,14 @@ export class SafeFileSystem {
       // Check before stat: on a case-insensitive disk, "Docs" would silently resolve to "docs".
       await this.assertNoCaseCollision(current, segment, forPath);
       current = join(current, segment);
-      const stat = await this.lstatOrUndefined(current);
-      if (stat === undefined) {
-        await mkdir(current);
-        continue;
+      if ((await this.lstatOrUndefined(current)) === undefined) {
+        try {
+          await mkdir(current);
+          continue;
+        } catch (error) {
+          // Another process created it in the meantime: check it like any existing folder.
+          if (errorCode(error) !== "EEXIST") throw error;
+        }
       }
       const real = await realpath(current);
       if (!isInside(this.root, real)) {
@@ -191,6 +263,10 @@ export class SafeFileSystem {
     for (const segment of normalized.split("/")) {
       let entries: string[];
       try {
+        // Check containment before listing, so a symlinked folder can't reveal outside names.
+        if (!isInside(this.root, await realpath(directory))) {
+          throw new SafeFsError("outside-root", `${original} resolves outside the root`);
+        }
         entries = await readdir(directory);
       } catch (error) {
         if (isNotFound(error)) throw new SafeFsError("not-found", `${original} does not exist`);

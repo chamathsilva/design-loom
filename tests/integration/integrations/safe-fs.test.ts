@@ -132,6 +132,37 @@ describe("writeAtomic", () => {
     assert.deepEqual(await readdir(outside), ["secret.txt"]);
   });
 
+  test("lets only one of two same-digest replacements succeed", async () => {
+    await fs.writeAtomic("race/state.json", bytes("v1"));
+    const expectedSha256 = sha256Hex(bytes("v1"));
+    const results = await Promise.allSettled([
+      fs.writeAtomic("race/state.json", bytes("from A"), { expectedSha256 }),
+      fs.writeAtomic("race/state.json", bytes("from B"), { expectedSha256 }),
+    ]);
+    assert.deepEqual(
+      results.map((result) => result.status),
+      ["fulfilled", "rejected"],
+    );
+    const failure = results[1] as PromiseRejectedResult;
+    assert.ok(failure.reason instanceof SafeFsError && failure.reason.code === "digest-mismatch");
+    assert.equal(text(await fs.readBytes("race/state.json")), "from A");
+  });
+
+  test("lets only one of two concurrent creates succeed", async () => {
+    const results = await Promise.allSettled([
+      fs.writeAtomic("race/new.txt", bytes("A")),
+      fs.writeAtomic("race/new.txt", bytes("B")),
+    ]);
+    assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+  });
+
+  test("writes through an alias folder into the real folder inside the root", async (t) => {
+    await mkdir(join(root, "real-folder"));
+    if (!(await trySymlink(t, join(root, "real-folder"), join(root, "alias-folder"), "dir"))) return;
+    await fs.writeAtomic("alias-folder/note.txt", bytes("anchored"));
+    assert.equal(await readFile(join(root, "real-folder", "note.txt"), "utf8"), "anchored");
+  });
+
   test("refuses to write through a symlink at the target", async (t) => {
     await writeFile(join(root, "real.txt"), "real");
     if (!(await trySymlink(t, join(root, "real.txt"), join(root, "alias.txt")))) return;
@@ -161,6 +192,21 @@ describe("readBytes", () => {
   test("refuses a symlink that leads outside the root", async (t) => {
     if (!(await trySymlink(t, join(outside, "secret.txt"), join(root, "leak.txt")))) return;
     await expectCode(fs.readBytes("leak.txt"), "outside-root");
+  });
+
+  test("checks containment before listing a symlinked folder", async (t) => {
+    if (!(await trySymlink(t, outside, join(root, "peek"), "dir"))) return;
+    // Listing first would report the on-disk name "secret.txt" in a case-collision error.
+    await assert.rejects(
+      fs.readBytes("peek/SECRET.txt"),
+      (error: unknown) =>
+        error instanceof SafeFsError && error.code === "outside-root" && !error.message.includes("secret.txt"),
+    );
+  });
+
+  test("reports a path through a regular file as missing", async () => {
+    await fs.writeAtomic("plain.txt", bytes("x"));
+    await expectCode(fs.readBytes("plain.txt/child.txt"), "not-found");
   });
 
   test("allows a symlink that stays inside the root", async (t) => {
