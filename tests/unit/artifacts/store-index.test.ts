@@ -173,6 +173,21 @@ describe("graph queries", () => {
     assert.deepEqual(paths, [...paths].sort());
   });
 
+  test("ties between shortest reason paths go to the path that is first as a whole", () => {
+    const repo = sampleRepository();
+    const template = readRecord(repo, "shared/artifacts/SHARED-STATUS-001.json");
+    const add = (id: string, depends_on: string[]): void =>
+      writeRecord(repo, `shared/artifacts/${id}.json`, { ...template, id, depends_on });
+    add("ROOT", []);
+    add("AA", ["ROOT"]);
+    add("ZZ", ["ROOT"]);
+    add("YY", ["AA"]);
+    add("BB", ["ZZ"]);
+    add("TARGET", ["YY", "BB"]);
+    const target = transitiveDependents(index(repo), ["ROOT"]).find((entry) => entry.id === "TARGET");
+    assert.deepEqual(target?.path, ["ROOT", "AA", "YY", "TARGET"]);
+  });
+
   test("a closure lists artifacts whose bytes didn't verify", () => {
     assert.deepEqual(referenceClosure(result, ["QA-BATCH-001"]).unverified, []);
     const repo = sampleRepository();
@@ -398,6 +413,19 @@ describe("store index: problems", () => {
     const result = index(repo);
     assert.equal(result.artifacts.has("DESIGN-001"), false);
     assert.equal(result.artifacts.has("QA-001"), true);
+  });
+
+  test("a repeated attachment is reported, and the rest of the index still builds", () => {
+    const repo = sampleRepository();
+    editRecord(repo, "changes/CHANGE-001/artifacts/QA-001.json", (value) => {
+      const attachments = value.attachments as unknown[];
+      attachments.push(attachments[0]);
+    });
+    const result = index(repo);
+    const repeated = result.diagnostics.find((entry) => entry.code === "STORE_DUPLICATE_ATTACHMENT");
+    assert.equal(repeated?.path, "changes/CHANGE-001/artifacts/QA-001.json#/attachments/1");
+    assert.equal(result.artifacts.get("QA-001")?.semanticDigest, null);
+    assert.ok(result.artifacts.get("DESIGN-001")?.semanticDigest);
   });
 
   test("unverified bytes leave the semantic digest unset", () => {

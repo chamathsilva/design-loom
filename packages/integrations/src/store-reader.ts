@@ -41,6 +41,13 @@ const MAX_FOLDER_DEPTH = 8;
 
 const decoder = new TextDecoder("utf-8", { fatal: true });
 
+/** A file-system failure to report, such as a SafeFsError, or EACCES or EIO from the OS. */
+function fsProblem(error: unknown): string | null {
+  if (error instanceof SafeFsError) return error.message;
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  return typeof code === "string" && /^E[A-Z]+$/.test(code) ? `${code}: ${(error as Error).message}` : null;
+}
+
 /** Lists and reads the store. Missing scan roots are fine: a new repository has none. */
 export interface ScanOptions {
   /** Record files larger than this are reported by size and not read (default: design doc 03's 1 MB). */
@@ -66,16 +73,15 @@ export async function scanStore(fs: SafeFileSystem, options: ScanOptions = {}): 
       entries = await fs.listDirectory(folder);
     } catch (error) {
       if (error instanceof SafeFsError && error.code === "not-found") return;
-      if (error instanceof SafeFsError) {
-        diagnostics.push(
-          diagnostic("STORE_FOLDER_UNREADABLE", "error", error.message, {
-            path: folder,
-            remediation: "Replace the folder with a real folder inside the repository.",
-          }),
-        );
-        return;
-      }
-      throw error;
+      const problem = fsProblem(error);
+      if (problem === null) throw error;
+      diagnostics.push(
+        diagnostic("STORE_FOLDER_UNREADABLE", "error", problem, {
+          path: folder,
+          remediation: "Make it a readable, real folder inside the repository.",
+        }),
+      );
+      return;
     }
     for (const entry of entries) {
       const path = `${folder}/${entry.name}`;
@@ -107,9 +113,36 @@ export async function scanStore(fs: SafeFileSystem, options: ScanOptions = {}): 
     }
   };
 
+  // Fixed roots such as shared/artifacts: every component must be a real folder, not a symlink,
+  // checked the same way as anything found inside them.
+  const realFolder = async (root: string): Promise<boolean> => {
+    let parent = "";
+    for (const segment of root.split("/")) {
+      let entries: Awaited<ReturnType<SafeFileSystem["listDirectory"]>>;
+      try {
+        entries = await fs.listDirectory(parent);
+      } catch (error) {
+        if (error instanceof SafeFsError && error.code === "not-found") return false;
+        throw error;
+      }
+      const path = parent === "" ? segment : `${parent}/${segment}`;
+      const entry = entries.find((candidate) => candidate.name === segment);
+      if (!entry) return false;
+      if (entry.kind !== "directory") {
+        warn(
+          entry.kind === "symlink" ? "STORE_SYMLINK_IGNORED" : "STORE_UNEXPECTED_FILE",
+          entry.kind === "symlink" ? "symlinks in record folders are not followed" : "expected a folder here",
+          path,
+          "Store records in a real folder inside the repository.",
+        );
+        return false;
+      }
+      parent = path;
+    }
+    return true;
+  };
   for (const root of STORE_SCAN_ROOTS) {
-    // Check the root folder itself the same way as anything inside it.
-    await walk(root, 0);
+    if (await realFolder(root)) await walk(root, 0);
   }
 
   const referenced = new Map<string, string | null>();
@@ -133,11 +166,12 @@ export async function scanStore(fs: SafeFileSystem, options: ScanOptions = {}): 
       }
       referenced.set(path, sha256Hex(await fs.readBytes(path)));
     } catch (error) {
-      if (!(error instanceof SafeFsError)) throw error;
+      const problem = fsProblem(error);
+      if (problem === null) throw error;
       referenced.set(path, null);
-      if (error.code !== "not-found") {
+      if (!(error instanceof SafeFsError && error.code === "not-found")) {
         diagnostics.push(
-          diagnostic("STORE_REFERENCE_UNREADABLE", "error", error.message, {
+          diagnostic("STORE_REFERENCE_UNREADABLE", "error", problem, {
             path,
             remediation: "Referenced files must be regular files inside the repository, named with their exact case.",
           }),
@@ -156,8 +190,9 @@ async function readRecord(fs: SafeFileSystem, path: string, maxBytes: number): P
     if (size > maxBytes) return { path, sha256: "", size };
     bytes = await fs.readBytes(path);
   } catch (error) {
-    if (!(error instanceof SafeFsError)) throw error;
-    return { path, sha256: "", size: 0, readError: error.message };
+    const problem = fsProblem(error);
+    if (problem === null) throw error;
+    return { path, sha256: "", size: 0, readError: problem };
   }
   const file: StoreFile = { path, sha256: sha256Hex(bytes), size: bytes.byteLength };
   if (classifyStorePath(path)) {

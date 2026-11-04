@@ -104,7 +104,9 @@ export function transitiveDependents(index: StoreIndex, changedIds: Iterable<str
         next.push(dependent);
       }
     }
-    frontier = next.sort(compareCodePoints);
+    // Keep discovery order: parents are visited in the order of their own (shortest, first) paths,
+    // and each parent's dependents in ID order, so ties go to the path that is first as a whole.
+    frontier = next;
   }
   return [...paths]
     .filter(([id]) => !startSet.has(id))

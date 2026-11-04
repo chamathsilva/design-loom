@@ -1,7 +1,7 @@
 // Reading a design repository from disk into the store index (backlog B05).
 
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, before, describe, test } from "node:test";
@@ -79,6 +79,42 @@ describe("store reader", () => {
     const warning = result.diagnostics.find((entry) => entry.code === "STORE_SYMLINK_IGNORED");
     assert.equal(warning?.path, "changes/CHANGE-009");
     assert.equal(result.changes.has("CHANGE-009"), false);
+  });
+
+  test("a symlinked scan root is reported, not followed", async (t) => {
+    const root = await writeRepository("linked-root");
+    await rename(join(root, "sources"), join(root, "archived-sources"));
+    if (!(await trySymlink(join(root, "archived-sources"), join(root, "sources")))) {
+      t.skip("symlinks need extra privileges on this OS");
+      return;
+    }
+    const result = await readStoreIndex(await SafeFileSystem.open(root), { applicationId: SAMPLE_APPLICATION_ID });
+    assert.equal(result.sources.size, 0);
+    const warning = result.diagnostics.find((entry) => entry.code === "STORE_SYMLINK_IGNORED");
+    assert.equal(warning?.path, "sources");
+  });
+
+  test("unreadable files become diagnostics, not crashes", async (t) => {
+    if (process.platform === "win32" || process.getuid?.() === 0) {
+      t.skip("permission bits don't block reads here");
+      return;
+    }
+    const root = await writeRepository("unreadable");
+    const content = join(root, "changes", "CHANGE-001", "content", "engineering.md");
+    const record = join(root, "changes", "CHANGE-001", "artifacts", "REVIEW-001.json");
+    await chmod(content, 0o000);
+    await chmod(record, 0o000);
+    try {
+      const result = await readStoreIndex(await SafeFileSystem.open(root), { applicationId: SAMPLE_APPLICATION_ID });
+      const codes = result.diagnostics.map((entry) => entry.code);
+      assert.ok(codes.includes("STORE_REFERENCE_UNREADABLE"), codes.join());
+      assert.ok(codes.includes("STORE_RECORD_UNREADABLE"), codes.join());
+      assert.equal(result.artifacts.get("DESIGN-001")?.semanticDigest, null);
+      assert.ok(result.artifacts.has("REQDOC-001"));
+    } finally {
+      await chmod(content, 0o644);
+      await chmod(record, 0o644);
+    }
   });
 
   test("content behind a symlink that leaves the root is not hashed", async (t) => {

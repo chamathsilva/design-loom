@@ -527,6 +527,21 @@ export function buildStoreIndex(input: StoreInput): StoreIndex {
         );
       }
     }
+    // The semantic digest needs each attachment path once; report repeats instead of throwing.
+    const attachmentPaths = new Set<string>();
+    for (const [index, attachment] of record.attachments.entries()) {
+      if (attachmentPaths.has(attachment.path) || attachment.path === record.content.path) {
+        verified = false;
+        report(
+          "STORE_DUPLICATE_ATTACHMENT",
+          "error",
+          `${attachment.path} is listed more than once`,
+          pointerPath(artifact.path, `/attachments/${index}`),
+          "List each file once: as the content or as one attachment.",
+        );
+      }
+      attachmentPaths.add(attachment.path);
+    }
     artifact.bytesVerified = verified;
     artifact.semanticDigest = verified ? artifactSemanticDigest(record) : null;
   }
