@@ -42,7 +42,11 @@ export interface ResultEnvelope {
   command: string;
   status: RunStatus;
   run_id: string;
-  /** The application root exactly as given; never written into shared artifacts. */
+  /**
+   * The application root exactly as given, as run.schema.json requires. Run reports stay in the
+   * ignored .design-loom/runs/ folder; a report committed as an artifact must be sanitized first
+   * (design doc 03), which is not done here.
+   */
   root: string;
   framework_version: string;
   /** SHA-256 over the command, its options and the digests of the inputs it read. */
