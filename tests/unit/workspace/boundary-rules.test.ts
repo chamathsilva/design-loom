@@ -112,6 +112,13 @@ describe("sourceViolations rejects", () => {
     ["new Function", 'const f = new Function("return 1");', ctx("workflow")],
     ["locale-dependent comparison", "names.sort((a, b) => a.localeCompare(b));", ctx("workflow")],
     ["Intl", "const f = new Intl.NumberFormat();", ctx("workflow")],
+    ["fetch in a ternary", "const get = ok ? fetch : undefined;", ctx("artifacts")],
+    ["process in a ternary", "const p = ok ? process : undefined;", ctx("config")],
+    ["fetch as a shorthand property", "const client = { fetch };", ctx("artifacts")],
+    ["host-dependent path module", 'import { resolve } from "node:path";', ctx("config")],
+    ["Windows path flavour", 'import { win32 } from "node:path/win32";', ctx("config")],
+    ["timers module", 'import { setTimeout } from "node:timers/promises";', ctx("workflow")],
+    ["async_hooks module", 'import { AsyncLocalStorage } from "node:async_hooks";', ctx("workflow")],
     ["undeclared third-party package", 'import x from "left-pad";', ctx("workflow")],
     ["undeclared scoped third-party package", 'import x from "@acme/tool/sub";', ctx("workflow")],
   ];
@@ -148,6 +155,8 @@ describe("sourceViolations accepts", () => {
     ["words in template text", "const t = `Date.now() is ${value}`;", ctx("workflow")],
     ["a regex literal with quotes and slashes", 'const re = /^"[^"]*"\\/x$/u;', ctx("workflow")],
     ["an object key named fetch", "const options = { fetch: false };", ctx("workflow")],
+    ["a later object key named process", "const step = { id, process: false };", ctx("workflow")],
+    ["POSIX path module", 'import { posix } from "node:path/posix";', ctx("config")],
     ["division, not a regex", "const r = total / count / 2;", ctx("workflow")],
     ["JSON data beside src", 'import s from "../schemas/a.schema.json" with { type: "json" };', ctx("validation")],
   ];

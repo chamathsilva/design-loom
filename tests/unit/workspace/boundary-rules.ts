@@ -16,10 +16,12 @@ export const MAY_DO_IO: ReadonlySet<string> = new Set(["cli", "integrations"]);
 
 /**
  * Top-level Node built-ins that touch files, the network, processes or threads, load or run code
- * dynamically (`module`, `vm`, `wasi`), or expose machine-specific state that breaks determinism
- * (`os`, `tty`, `v8`). Sub-paths such as `dns/promises` are matched by their top-level name.
+ * dynamically (`module`, `vm`, `wasi`), or depend on the host or on timing (`os`, `tty`, `v8`,
+ * `path`, `timers`, `async_hooks`). Sub-paths such as `dns/promises` are matched by their top-level
+ * name, except the allowed ones below.
  */
 const IO_BUILTINS: ReadonlySet<string> = new Set([
+  "async_hooks",
   "child_process",
   "cluster",
   "dgram",
@@ -32,11 +34,13 @@ const IO_BUILTINS: ReadonlySet<string> = new Set([
   "module",
   "net",
   "os",
+  "path",
   "perf_hooks",
   "process",
   "readline",
   "repl",
   "sqlite",
+  "timers",
   "tls",
   "tty",
   "v8",
@@ -45,13 +49,27 @@ const IO_BUILTINS: ReadonlySet<string> = new Set([
   "worker_threads",
 ]);
 
+/**
+ * `node:path` follows the host (separators, and `resolve` reads the working directory); its POSIX
+ * flavour behaves the same everywhere, so pure packages may use that one.
+ */
+const PURE_BUILTIN_EXCEPTIONS: ReadonlySet<string> = new Set(["path/posix"]);
+
 const BUILTINS: ReadonlySet<string> = new Set(builtinModules);
+
+/**
+ * A bare reference to one of `names`. An object key (`{ fetch: x }`, `, fetch: x`) is the only
+ * form skipped, so `ok ? fetch : x` and `case fetch:` are still caught.
+ */
+function bareReference(names: string): RegExp {
+  return new RegExp(`(?<![.\\w$])(?<![{,]\\s*)(?:${names})\\b|(?<=[{,]\\s*)(?:${names})\\b(?!\\s*:)`);
+}
 
 /** Globals and helpers that perform I/O, load modules or run code without a static import. */
 const IO_GLOBAL_PATTERNS: ReadonlyArray<[RegExp, string]> = [
   // Any bare reference, so aliases such as `const f = fetch` count too. Members (store.fetch) and
-  // object keys (`fetch: true`) don't.
-  [/(?<![.\w$])(?:fetch|WebSocket|EventSource)\b(?!\s*:)/, "uses a network global"],
+  // object keys (`{ fetch: true }`) don't.
+  [bareReference("fetch|WebSocket|EventSource"), "uses a network global"],
   [/(?<![.\w$])globalThis\b/, "reaches the global object"],
   [/\b(?:self|window|global)\s*\.\s*(?:fetch|WebSocket|EventSource|process)\b/, "uses a global through its receiver"],
   [/\bgetBuiltinModule\b/, "loads a built-in through process.getBuiltinModule"],
@@ -64,7 +82,7 @@ const IO_GLOBAL_PATTERNS: ReadonlyArray<[RegExp, string]> = [
  * outputs). Time, randomness, environment, locale and host details are passed in by cli or integrations.
  */
 const NONDETERMINISTIC_PATTERNS: ReadonlyArray<[RegExp, string]> = [
-  [/(?<![.\w$])process\b(?!\s*:)/, "reads the process object"],
+  [bareReference("process"), "reads the process object"],
   [/\bDate\s*\.\s*now\b|\bnew\s+Date\s*\(\s*\)|(?<!\bnew\s+)(?<![.\w$])Date\s*\(/, "reads the current time"],
   [/\bperformance\s*\.\s*now\b/, "reads a timer"],
   [
@@ -293,7 +311,7 @@ export function specifierViolation(specifier: string, ctx: FileContext): string 
   const builtin = specifier.startsWith("node:") ? specifier.slice("node:".length) : specifier;
   if (BUILTINS.has(builtin) || specifier.startsWith("node:")) {
     const topLevel = builtin.split("/")[0] ?? builtin;
-    if (IO_BUILTINS.has(topLevel) && !MAY_DO_IO.has(ctx.packageDir)) {
+    if (IO_BUILTINS.has(topLevel) && !PURE_BUILTIN_EXCEPTIONS.has(builtin) && !MAY_DO_IO.has(ctx.packageDir)) {
       return `pure package ${ctx.packageDir} imports I/O module "${specifier}"`;
     }
     return undefined;
