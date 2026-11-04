@@ -1,0 +1,57 @@
+{
+  "contract": "canonical-json-v1",
+  "vectors": [
+    {
+      "id": "scalar-key-order",
+      "input": {
+        "😀": 2,
+        "｡": 1
+      },
+      "canonical": "{\"｡\":1,\"😀\":2}",
+      "sha256": "a325e3cddf75ad1f592547acabd8033c6dcca06a4d9d9caacf65e5349cc6e30c"
+    },
+    {
+      "id": "nested-array-order",
+      "input": {
+        "z": [
+          {
+            "b": 2,
+            "a": 1
+          },
+          0
+        ],
+        "a": true
+      },
+      "canonical": "{\"a\":true,\"z\":[{\"a\":1,\"b\":2},0]}",
+      "sha256": "ed21567018cca5b3f70865a4fbd1a0ac4c1099b4895caeeecea858b6b33df800"
+    },
+    {
+      "id": "integer-boundaries",
+      "input": [
+        -9007199254740991,
+        9007199254740991,
+        -0.0,
+        1.0
+      ],
+      "canonical": "[-9007199254740991,9007199254740991,0,1]",
+      "sha256": "36800677c9813549d2efcd46cf602b9a002d9ff90bb1bb5f7034f7de490bf13e"
+    },
+    {
+      "id": "string-escaping",
+      "input": {
+        "text": "\"\\\b\t\n\f\r\u0000/é"
+      },
+      "canonical": "{\"text\":\"\\\"\\\\\\b\\t\\n\\f\\r\\u0000/é\"}",
+      "sha256": "0e05b04a4915dccb7d08df28f88d6e3e712ea36bd4931443417114a00eff47b1"
+    },
+    {
+      "id": "no-unicode-normalization",
+      "input": {
+        "é": null,
+        "é": false
+      },
+      "canonical": "{\"é\":false,\"é\":null}",
+      "sha256": "3af236ccd73e307485f7a01d60df6e88ddafa1a9ae2ffab47d4633dfccb6e666"
+    }
+  ]
+}
