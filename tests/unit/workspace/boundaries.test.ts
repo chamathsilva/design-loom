@@ -27,9 +27,12 @@ const MAY_USE_INTEGRATIONS = new Set(["cli"]);
 
 /**
  * Third-party runtime dependencies, which must be bundled into the plugin (doc 02).
- * Empty in B01; each addition should be a deliberate, reviewed change.
+ * Each addition should be a deliberate, reviewed change with its reason noted here.
  */
-const ALLOWED_THIRD_PARTY_RUNTIME: Record<string, readonly string[]> = {};
+const ALLOWED_THIRD_PARTY_RUNTIME: Record<string, readonly string[]> = {
+  // B02: JSON Schema Draft 2020-12 validation (design doc 02 names Ajv) and its date-time/uri formats.
+  validation: ["ajv", "ajv-formats"],
+};
 
 interface PackageJson {
   name: string;

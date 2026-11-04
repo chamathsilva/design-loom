@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "id": "QA-001",
+  "application_id": "sample-catalog",
+  "change_id": "CHANGE-001",
+  "type": "test-design",
+  "title": "Qa",
+  "state": "in_review",
+  "workflow_step": "qa",
+  "template_id": "core.test-design",
+  "template_version": "0.1.0",
+  "framework_version": "0.1.0",
+  "content": {
+    "path": "content/qa.md",
+    "sha256": "8251c0793fff7281e20d5fd1a2f8b240e06ceaa8f0689aa7ecb05b1de710ee34"
+  },
+  "attachments": [
+    {
+      "path": "traceability.json",
+      "sha256": "cfdaa275d5bb101e3f0ce10a2cef29702a7f1aebcc25860861f96ae82525ccaf"
+    }
+  ],
+  "source_ids": [
+    "src-catalog-requirement"
+  ],
+  "requirement_ids": [
+    "REQ-001"
+  ],
+  "depends_on": [
+    "REQDOC-001",
+    "CONTRACT-001",
+    "DESIGN-001"
+  ],
+  "owner_role": "qa",
+  "applicability": "applicable"
+}

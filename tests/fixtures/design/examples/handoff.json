@@ -1,0 +1,170 @@
+{
+  "schema_version": "1.0",
+  "task_id": "TASK-001",
+  "application_id": "sample-catalog",
+  "change_id": "CHANGE-001",
+  "baseline_id": "BASELINE-001",
+  "baseline_digest": "faf225589af7916c5f87056e2bd32959d8aa15b5a5a5245a19d4b0991c77057c",
+  "design_repo_commit": "2222222222222222222222222222222222222222",
+  "target": {
+    "repository_id": "catalog-api",
+    "starting_commit": "3333333333333333333333333333333333333333"
+  },
+  "artifact_ids": [
+    "REQDOC-001",
+    "CONTRACT-001",
+    "DESIGN-001",
+    "QA-001",
+    "REVIEW-001",
+    "SHARED-STATUS-001"
+  ],
+  "source_ids": [
+    "src-catalog-requirement"
+  ],
+  "requirement_ids": [
+    "REQ-001"
+  ],
+  "allowed_paths": [
+    "src/",
+    "tests/"
+  ],
+  "excluded_paths": [
+    "infra/"
+  ],
+  "dependency_tasks": [],
+  "checks": [
+    {
+      "id": "unit-tests",
+      "repository_id": "catalog-api",
+      "argv": [
+        "npm",
+        "test",
+        "--",
+        "--runInBand"
+      ],
+      "working_directory": ".",
+      "required": true
+    }
+  ],
+  "stop_conditions": [
+    "Shared contract must change",
+    "Required source unavailable",
+    "Baseline verification fails"
+  ],
+  "framework_lock_digest": "ee3a37dcf7e12e50dc021b663849e306c06e0c4dd4b7e3d9a9caa094b1cce60e",
+  "files": [
+    {
+      "repository_id": "catalog-design",
+      "path": "TASK.md",
+      "sha256": "977eb2baedb1674d3921a84e4f96ceae8c6fd4c70e1bc3920da5d5e73c97e181"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "application.json",
+      "sha256": "224ce27c0e135b99201f2b37f0e0bb5e8cc24bb798d3e6811c84677639d1614b"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "artifacts/CONTRACT-001.json",
+      "sha256": "4a238995f1b7bc825160072d501194a700bce33cdcc23d18561d9bb023ce3cb5"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "artifacts/DESIGN-001.json",
+      "sha256": "16350de7edc3c5fafa876b84e19cd8f94676ec53df976d7f9cc3ca1ee047db20"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "artifacts/QA-001.json",
+      "sha256": "cd2c217777701296c5ff21a0d98613f3ff999521cfc082861fc6a5febe1d89b6"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "artifacts/REQDOC-001.json",
+      "sha256": "cbd32e317a4bc62c34c6d5a07bdbf3f8b1a04b14c2f83647e3599ca2dc285bb3"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "artifacts/REVIEW-001.json",
+      "sha256": "21aa34294ce15d874308b8414f9d36140349b769ad114812489347ba488b0f2c"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "change.json",
+      "sha256": "a2c51e12ae4ded3b845587c2fe1dd50fbea34efad1ea3df41231587f7ee19373"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "content/contract.md",
+      "sha256": "68a7fd112424426e4f7623facdb8656f92bc74ad058480255c389a13dd9560cf"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "content/engineering.md",
+      "sha256": "a2712ce7d1c74e9eb1cd7a92948adb098be13481296af98b845b231a6daf2f13"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "content/qa.md",
+      "sha256": "8251c0793fff7281e20d5fd1a2f8b240e06ceaa8f0689aa7ecb05b1de710ee34"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "content/requirements.md",
+      "sha256": "f1291ad5f532f8ba803f4827c9fec2b867c9a7e4f79b55dae86a5974f26eb6d2"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "content/review.md",
+      "sha256": "6c047b9c37dd4ef6e044717b568759d2083f46bd447dc446e35aecedcddeb4e4"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "findings.json",
+      "sha256": "19df0a63e12b401e92ad57be242f42efd0d09f15e1cf3ce21421f090ffbd3a1e"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "framework-lock.json",
+      "sha256": "5363c1150af1eced3cd316f6a04df657655cf1e752f0581884a879e47077997b"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "shared/artifacts/SHARED-STATUS-001.json",
+      "sha256": "4f3b033867a97af76f8e4777d67eef8b83b1a2d6eaa097d456464469ccf803f6"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "shared/content/item-status.md",
+      "sha256": "302259e87c3525811819f82c23c4c7b8f026306f7dbbfc6315660783ae420d72"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "source.json",
+      "sha256": "4b811f873c0218ef983f7dcd5df705cb0754f40a01a725ce944e846866f2e877"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "sources/snapshots/catalog-requirement.md",
+      "sha256": "63ce285f0d0a330b69118a5d650cceb60b6347ccf9d9d5dad229ca971d334e3a"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "task.json",
+      "sha256": "99cf674e903a1b504cc25f996114ce11b5fb69cd7bd8ba8b9fa222e7901fef0b"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "traceability.json",
+      "sha256": "cfdaa275d5bb101e3f0ce10a2cef29702a7f1aebcc25860861f96ae82525ccaf"
+    },
+    {
+      "repository_id": "catalog-design",
+      "path": "workflow.json",
+      "sha256": "7d3d133c72c328306ca0bc730649e393bb52c616de0ed722492b1c99ce4609a5"
+    }
+  ],
+  "task_digest": "99cf674e903a1b504cc25f996114ce11b5fb69cd7bd8ba8b9fa222e7901fef0b",
+  "review_status": "blocked",
+  "snapshot_integrity": "draft"
+}

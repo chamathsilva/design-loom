@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "id": "CHANGE-002",
+  "application_id": "sample-catalog",
+  "title": "Public catalog listing visibility",
+  "workflow_id": "core.feature-design",
+  "workflow_version": "0.1.0",
+  "requirement_ids": [
+    "REQ-001"
+  ],
+  "source_ids": [
+    "src-catalog-requirement"
+  ],
+  "target_repository_ids": [
+    "catalog-api"
+  ],
+  "scope": "Design read-side exclusion of archived catalog items.",
+  "exclusions": [
+    "Bulk archive",
+    "Restoration workflow"
+  ],
+  "owner_roles": [
+    "engineering",
+    "qa"
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "change_id": "QA-CAMPAIGN-001",
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "acceptance_criteria": [
+        {
+          "id": "AC-001",
+          "text": "Archiving returns archived state."
+        },
+        {
+          "id": "AC-002",
+          "text": "Public listing excludes archived items."
+        },
+        {
+          "id": "AC-003",
+          "text": "Unauthorized callers cannot change state."
+        }
+      ],
+      "source_id": "src-catalog-requirement"
+    }
+  ],
+  "tests": [
+    {
+      "id": "BATCH-TEST-001",
+      "requirement_ids": [
+        "REQ-001"
+      ],
+      "criterion_ids": [
+        "AC-001"
+      ],
+      "risk_ids": [],
+      "expected_result": "Item state is archived.",
+      "execution": "not_run",
+      "evidence_refs": []
+    },
+    {
+      "id": "BATCH-TEST-002",
+      "requirement_ids": [
+        "REQ-001"
+      ],
+      "criterion_ids": [
+        "AC-002"
+      ],
+      "risk_ids": [],
+      "expected_result": "Archived item is absent from public listing.",
+      "execution": "not_run",
+      "evidence_refs": []
+    },
+    {
+      "id": "BATCH-TEST-003",
+      "requirement_ids": [
+        "REQ-001"
+      ],
+      "criterion_ids": [
+        "AC-003"
+      ],
+      "risk_ids": [],
+      "expected_result": "Unauthorized request leaves state unchanged.",
+      "execution": "not_run",
+      "evidence_refs": []
+    }
+  ],
+  "design_links": [
+    {
+      "requirement_id": "REQ-001",
+      "artifact_ids": [
+        "DESIGN-001",
+        "DESIGN-002"
+      ]
+    }
+  ],
+  "gaps": [],
+  "covered_change_ids": [
+    "CHANGE-001",
+    "CHANGE-002"
+  ]
+}

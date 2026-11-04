@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "id": "REQDOC-001",
+  "application_id": "sample-catalog",
+  "change_id": "CHANGE-001",
+  "type": "requirements",
+  "title": "Requirements",
+  "state": "draft",
+  "workflow_step": "intake",
+  "template_id": "core.requirements",
+  "template_version": "0.1.0",
+  "framework_version": "0.1.0",
+  "content": {
+    "path": "content/requirements.md",
+    "sha256": "f1291ad5f532f8ba803f4827c9fec2b867c9a7e4f79b55dae86a5974f26eb6d2"
+  },
+  "attachments": [],
+  "source_ids": [
+    "src-catalog-requirement"
+  ],
+  "requirement_ids": [
+    "REQ-001"
+  ],
+  "depends_on": [],
+  "owner_role": "engineering",
+  "applicability": "applicable",
+  "context": {
+    "schema_version": "1.0",
+    "references": [
+      {
+        "kind": "source",
+        "id": "src-catalog-requirement",
+        "state": "read",
+        "revision": "tutorial-v1",
+        "sha256": "63ce285f0d0a330b69118a5d650cceb60b6347ccf9d9d5dad229ca971d334e3a"
+      }
+    ],
+    "gaps": []
+  }
+}

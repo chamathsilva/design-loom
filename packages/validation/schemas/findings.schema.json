@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-loom.example/schemas/v1/findings.schema.json",
+  "title": "Design Loom findings",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "change_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+    },
+    "reviewed_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "artifact-semantic-v1 digest of the reviewed artifact."
+          }
+        },
+        "required": [
+          "id",
+          "sha256"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "omitted_artifact_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "blocking",
+              "major",
+              "minor",
+              "info"
+            ]
+          },
+          "artifact_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1
+          },
+          "provenance": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "human",
+              "deterministic"
+            ]
+          },
+          "disposition": {
+            "type": "string",
+            "enum": [
+              "open",
+              "resolved",
+              "accepted"
+            ]
+          },
+          "resolution": {
+            "type": "string"
+          },
+          "decision_reference": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "severity",
+          "artifact_ids",
+          "description",
+          "evidence",
+          "provenance",
+          "disposition",
+          "resolution",
+          "decision_reference"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]*\\.[a-z0-9.-]+$"
+      },
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "change_id",
+    "reviewed_artifacts",
+    "omitted_artifact_ids",
+    "findings"
+  ],
+  "additionalProperties": false
+}

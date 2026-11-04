@@ -1,0 +1,725 @@
+{
+  "schema_version": "1.0",
+  "configuration": {
+    "application": {
+      "schema_version": "1.0",
+      "application_id": "sample-catalog",
+      "name": "Sample Catalog",
+      "design_repository_id": "catalog-design",
+      "repositories": [
+        {
+          "id": "catalog-design",
+          "url": "https://github.com/example/catalog-design",
+          "role": "design",
+          "owner_role": "architecture"
+        },
+        {
+          "id": "catalog-api",
+          "url": "https://github.com/example/catalog-api",
+          "role": "service",
+          "owner_role": "engineering"
+        }
+      ],
+      "default_workflow": "core.feature-design",
+      "framework_version": "0.1.0",
+      "extension_paths": [],
+      "template_selections": {},
+      "capabilities": [
+        {
+          "id": "requirements.read",
+          "provider": "local-files",
+          "mode": "read",
+          "required": true,
+          "scopes": [
+            "sources/snapshots/"
+          ],
+          "setup_reference": "docs/onboarding.md"
+        },
+        {
+          "id": "repository.read",
+          "provider": "local-git",
+          "mode": "read",
+          "required": true,
+          "scopes": [
+            "catalog-design",
+            "catalog-api"
+          ],
+          "setup_reference": "docs/onboarding.md"
+        },
+        {
+          "id": "review.verify",
+          "provider": "github-read",
+          "mode": "verify",
+          "required": false,
+          "scopes": [
+            "catalog-design"
+          ],
+          "setup_reference": "docs/onboarding.md"
+        }
+      ],
+      "reviewer_roles": {
+        "engineering": [
+          "example-engineer"
+        ],
+        "qa": [
+          "example-qa"
+        ],
+        "architecture": [
+          "example-architect"
+        ]
+      },
+      "required_review_roles": [],
+      "limits": {
+        "max_artifacts": 5000,
+        "max_metadata_bytes": 1048576,
+        "max_source_bytes": 10485760
+      },
+      "required_artifact_types": []
+    },
+    "framework_lock": {
+      "schema_version": "1.0",
+      "framework_version": "0.1.0",
+      "engine_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "resources_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "extensions_locked": [],
+      "schema_contract_version": "1.0"
+    },
+    "artifact_types": [
+      "contract",
+      "engineering-design",
+      "implementation-evidence",
+      "requirements",
+      "review",
+      "test-design"
+    ],
+    "core_rule_ids": [
+      "DL001",
+      "DL002",
+      "DL003",
+      "DL004",
+      "DL005",
+      "DL006",
+      "DL007",
+      "DL008",
+      "DL009",
+      "DL010",
+      "DL011",
+      "DL012",
+      "DL013",
+      "DL014",
+      "DL015",
+      "DL016"
+    ],
+    "workflows": [
+      {
+        "schema_version": "1.0",
+        "id": "core.feature-design",
+        "version": "0.1.0",
+        "description": "Suggested activities for flexible engineering and late/batched QA with optional review.",
+        "steps": [
+          {
+            "id": "intake",
+            "skill": "dl-start-change",
+            "after": [],
+            "capabilities": [
+              "requirements.read"
+            ],
+            "required_outputs": [
+              "requirements"
+            ],
+            "blocking_rules": [
+              "DL001",
+              "DL003",
+              "DL004"
+            ],
+            "reviewer_roles": [],
+            "required_for_handoff": false
+          },
+          {
+            "id": "contracts",
+            "skill": "dl-design-change",
+            "after": [
+              "intake"
+            ],
+            "capabilities": [
+              "repository.read"
+            ],
+            "required_outputs": [
+              "contract"
+            ],
+            "blocking_rules": [
+              "DL001",
+              "DL003",
+              "DL004"
+            ],
+            "reviewer_roles": [],
+            "required_for_handoff": false
+          },
+          {
+            "id": "engineering",
+            "skill": "dl-design-change",
+            "after": [
+              "contracts"
+            ],
+            "capabilities": [
+              "repository.read"
+            ],
+            "required_outputs": [
+              "engineering-design"
+            ],
+            "blocking_rules": [
+              "DL001",
+              "DL003",
+              "DL004"
+            ],
+            "reviewer_roles": [],
+            "required_for_handoff": false
+          },
+          {
+            "id": "qa",
+            "skill": "dl-design-tests",
+            "after": [
+              "intake"
+            ],
+            "capabilities": [
+              "requirements.read"
+            ],
+            "required_outputs": [
+              "test-design"
+            ],
+            "blocking_rules": [
+              "DL001",
+              "DL003",
+              "DL004"
+            ],
+            "reviewer_roles": [],
+            "required_for_handoff": false
+          },
+          {
+            "id": "review",
+            "skill": "dl-review-change",
+            "after": [
+              "engineering",
+              "qa"
+            ],
+            "capabilities": [
+              "repository.read"
+            ],
+            "required_outputs": [
+              "review"
+            ],
+            "blocking_rules": [
+              "DL001",
+              "DL003",
+              "DL004"
+            ],
+            "reviewer_roles": [],
+            "required_for_handoff": false
+          },
+          {
+            "id": "baseline",
+            "skill": "dl-review-change",
+            "after": [
+              "review"
+            ],
+            "capabilities": [
+              "review.verify"
+            ],
+            "required_outputs": [
+              "baseline"
+            ],
+            "blocking_rules": [
+              "DL001",
+              "DL003",
+              "DL004",
+              "DL011",
+              "DL016"
+            ],
+            "reviewer_roles": [],
+            "required_for_handoff": false
+          },
+          {
+            "id": "handoff",
+            "skill": "dl-prepare-handoff",
+            "after": [
+              "baseline"
+            ],
+            "capabilities": [
+              "repository.read",
+              "review.verify"
+            ],
+            "required_outputs": [
+              "handoff"
+            ],
+            "blocking_rules": [
+              "DL001",
+              "DL003",
+              "DL004",
+              "DL011",
+              "DL016"
+            ],
+            "reviewer_roles": [],
+            "required_for_handoff": false
+          },
+          {
+            "id": "verify",
+            "skill": "dl-verify-implementation",
+            "after": [
+              "handoff"
+            ],
+            "capabilities": [
+              "repository.read"
+            ],
+            "required_outputs": [
+              "implementation-evidence"
+            ],
+            "blocking_rules": [
+              "DL001",
+              "DL003",
+              "DL004"
+            ],
+            "reviewer_roles": [],
+            "required_for_handoff": false
+          }
+        ]
+      }
+    ],
+    "templates": [
+      {
+        "schema_version": "1.0",
+        "id": "core.contract",
+        "version": "0.1.0",
+        "artifact_type": "contract",
+        "content_path": "contract.md",
+        "sections": [
+          {
+            "key": "context-used",
+            "heading": "Context used",
+            "required": true,
+            "guidance": "Identify source and artifact revisions actually read, linked or unavailable, plus assumptions and context gaps."
+          },
+          {
+            "key": "purpose",
+            "heading": "Purpose",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "producer-and-consumers",
+            "heading": "Producer and consumers",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "contract",
+            "heading": "Contract",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "version-compatibility",
+            "heading": "Version compatibility",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "failure-behavior",
+            "heading": "Failure behavior",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "ownership",
+            "heading": "Ownership",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          }
+        ]
+      },
+      {
+        "schema_version": "1.0",
+        "id": "core.engineering-design",
+        "version": "0.1.0",
+        "artifact_type": "engineering-design",
+        "content_path": "engineering-design.md",
+        "sections": [
+          {
+            "key": "context-used",
+            "heading": "Context used",
+            "required": true,
+            "guidance": "Identify source and artifact revisions actually read, linked or unavailable, plus assumptions and context gaps."
+          },
+          {
+            "key": "summary",
+            "heading": "Summary",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "scope",
+            "heading": "Scope",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "requirement-mapping",
+            "heading": "Requirement mapping",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "current-behavior",
+            "heading": "Current behavior",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "proposed-design",
+            "heading": "Proposed design",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "contracts-and-dependencies",
+            "heading": "Contracts and dependencies",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "data-changes",
+            "heading": "Data changes",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "failure-handling",
+            "heading": "Failure handling",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "operational-considerations",
+            "heading": "Operational considerations",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "ui-references",
+            "heading": "UI references",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "rollout-and-recovery",
+            "heading": "Rollout and recovery",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "assumptions-and-open-questions",
+            "heading": "Assumptions and open questions",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          }
+        ]
+      },
+      {
+        "schema_version": "1.0",
+        "id": "core.implementation-evidence",
+        "version": "0.1.0",
+        "artifact_type": "implementation-evidence",
+        "content_path": "implementation-evidence.md",
+        "sections": [
+          {
+            "key": "context-used",
+            "heading": "Context used",
+            "required": true,
+            "guidance": "Identify source and artifact revisions actually read, linked or unavailable, plus assumptions and context gaps."
+          },
+          {
+            "key": "task-and-baseline",
+            "heading": "Task and baseline",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "implementation-references",
+            "heading": "Implementation references",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "commands-actually-run",
+            "heading": "Commands actually run",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "results-and-evidence",
+            "heading": "Results and evidence",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "contract-verification",
+            "heading": "Contract verification",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "scope-deviations",
+            "heading": "Scope deviations",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "unresolved-findings",
+            "heading": "Unresolved findings",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          }
+        ]
+      },
+      {
+        "schema_version": "1.0",
+        "id": "core.requirements",
+        "version": "0.1.0",
+        "artifact_type": "requirements",
+        "content_path": "requirements.md",
+        "sections": [
+          {
+            "key": "context-used",
+            "heading": "Context used",
+            "required": true,
+            "guidance": "Identify source and artifact revisions actually read, linked or unavailable, plus assumptions and context gaps."
+          },
+          {
+            "key": "scope",
+            "heading": "Scope",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "requirements",
+            "heading": "Requirements",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "acceptance-criteria",
+            "heading": "Acceptance criteria",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "sources",
+            "heading": "Sources",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "exclusions",
+            "heading": "Exclusions",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "open-questions",
+            "heading": "Open questions",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          }
+        ]
+      },
+      {
+        "schema_version": "1.0",
+        "id": "core.review",
+        "version": "0.1.0",
+        "artifact_type": "review",
+        "content_path": "review.md",
+        "sections": [
+          {
+            "key": "context-used",
+            "heading": "Context used",
+            "required": true,
+            "guidance": "Identify source and artifact revisions actually read, linked or unavailable, plus assumptions and context gaps."
+          },
+          {
+            "key": "reviewed-scope",
+            "heading": "Reviewed scope",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "reviewed-revisions",
+            "heading": "Reviewed revisions",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "automated-checks",
+            "heading": "Automated checks",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "findings",
+            "heading": "Findings",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "coverage",
+            "heading": "Coverage",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "omitted-scope",
+            "heading": "Omitted scope",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "decisions-and-recommendation",
+            "heading": "Decisions and recommendation",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          }
+        ]
+      },
+      {
+        "schema_version": "1.0",
+        "id": "core.test-design",
+        "version": "0.1.0",
+        "artifact_type": "test-design",
+        "content_path": "test-design.md",
+        "sections": [
+          {
+            "key": "context-used",
+            "heading": "Context used",
+            "required": true,
+            "guidance": "Identify source and artifact revisions actually read, linked or unavailable, plus assumptions and context gaps."
+          },
+          {
+            "key": "scope",
+            "heading": "Scope",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "source-requirements",
+            "heading": "Source requirements",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "acceptance-scenarios",
+            "heading": "Acceptance scenarios",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "requirement-to-test-mapping",
+            "heading": "Requirement-to-test mapping",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "integration-and-technical-risks",
+            "heading": "Integration and technical risks",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "test-data-and-environment",
+            "heading": "Test data and environment",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "regression-impact",
+            "heading": "Regression impact",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "execution-status",
+            "heading": "Execution status",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          },
+          {
+            "key": "coverage-gaps",
+            "heading": "Coverage gaps",
+            "required": true,
+            "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+          }
+        ]
+      }
+    ],
+    "extensions": []
+  },
+  "provenance": [
+    {
+      "pointer": "/application",
+      "origin": "application.json",
+      "sha256": "224ce27c0e135b99201f2b37f0e0bb5e8cc24bb798d3e6811c84677639d1614b"
+    },
+    {
+      "pointer": "/framework_lock",
+      "origin": "framework-lock.json",
+      "sha256": "5363c1150af1eced3cd316f6a04df657655cf1e752f0581884a879e47077997b"
+    },
+    {
+      "pointer": "/artifact_types",
+      "origin": "core/resources",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "pointer": "/core_rule_ids",
+      "origin": "core/engine",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "pointer": "/workflows/0",
+      "origin": "workflow.json",
+      "sha256": "7d3d133c72c328306ca0bc730649e393bb52c616de0ed722492b1c99ce4609a5"
+    },
+    {
+      "pointer": "/extensions",
+      "origin": "application.json",
+      "sha256": "224ce27c0e135b99201f2b37f0e0bb5e8cc24bb798d3e6811c84677639d1614b"
+    },
+    {
+      "pointer": "/templates/0",
+      "origin": "core/templates/contract.template.json",
+      "sha256": "0cb94b7614730be9a0e91378317e78e557d12288ce9f4b9fa59423d76bdf4de9"
+    },
+    {
+      "pointer": "/templates/1",
+      "origin": "core/templates/engineering-design.template.json",
+      "sha256": "6258b06c4b07fe1980ef4c33bf5926a7feede7e7fc646e8957dd1da070e36525"
+    },
+    {
+      "pointer": "/templates/2",
+      "origin": "core/templates/implementation-evidence.template.json",
+      "sha256": "82b8d2fe5983be16891d74f05f18d8770872f71b30f31635f8f55fc6e2e8b14c"
+    },
+    {
+      "pointer": "/templates/3",
+      "origin": "core/templates/requirements.template.json",
+      "sha256": "8c6153039b638df30541f303c23f92e05067439274943680c9ddde40e7f6d785"
+    },
+    {
+      "pointer": "/templates/4",
+      "origin": "core/templates/review.template.json",
+      "sha256": "3abcdae23fe278d1453f70945eb5a86fc27248a47d270f2d96b4d91247333674"
+    },
+    {
+      "pointer": "/templates/5",
+      "origin": "core/templates/test-design.template.json",
+      "sha256": "f8725b06d6444d5b81626d3b47a41dcf57859c5747fd69be526fcc2ac20f5785"
+    }
+  ]
+}

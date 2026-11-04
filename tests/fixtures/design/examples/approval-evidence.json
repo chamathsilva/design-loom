@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "baseline_id": "BASELINE-001",
+  "baseline_digest": "faf225589af7916c5f87056e2bd32959d8aa15b5a5a5245a19d4b0991c77057c",
+  "provider": "github",
+  "proposal_pr_url": "https://github.com/example/catalog-design/pull/1",
+  "proposal_head": "4444444444444444444444444444444444444444",
+  "merged_commit": "2222222222222222222222222222222222222222",
+  "manifest_sha256": "04b4e46f5f043975d21b475f5b38bed486008da9ce5a858f7b6220e3708abb5d",
+  "verified_at": "2026-11-03T12:00:00Z",
+  "result": "blocked",
+  "reviews": [],
+  "checks": [],
+  "diagnostics": [
+    {
+      "code": "DL011",
+      "severity": "error",
+      "message": "Synthetic example has no verifiable provider approval.",
+      "path": "baseline.json",
+      "evidence": [
+        "All Git revisions and reviewer identities are synthetic."
+      ],
+      "remediation": "Use a real sandbox proposal PR and execute the approval adapter."
+    }
+  ]
+}

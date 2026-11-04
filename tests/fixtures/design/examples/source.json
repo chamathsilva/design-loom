@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "id": "src-catalog-requirement",
+  "application_id": "sample-catalog",
+  "provider": "file",
+  "locator": "sources/snapshots/catalog-requirement.md",
+  "revision": "tutorial-v1",
+  "retrieved_at": "2026-11-03T12:00:00Z",
+  "state": "captured",
+  "sha256": "63ce285f0d0a330b69118a5d650cceb60b6347ccf9d9d5dad229ca971d334e3a",
+  "snapshot_path": "sources/snapshots/catalog-requirement.md",
+  "notes": "Synthetic tutorial; no external retrieval asserted."
+}

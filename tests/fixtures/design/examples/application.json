@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0",
+  "application_id": "sample-catalog",
+  "name": "Sample Catalog",
+  "design_repository_id": "catalog-design",
+  "repositories": [
+    {
+      "id": "catalog-design",
+      "url": "https://github.com/example/catalog-design",
+      "role": "design",
+      "owner_role": "architecture"
+    },
+    {
+      "id": "catalog-api",
+      "url": "https://github.com/example/catalog-api",
+      "role": "service",
+      "owner_role": "engineering"
+    }
+  ],
+  "default_workflow": "core.feature-design",
+  "framework_version": "0.1.0",
+  "extension_paths": [],
+  "template_selections": {},
+  "capabilities": [
+    {
+      "id": "requirements.read",
+      "provider": "local-files",
+      "mode": "read",
+      "required": true,
+      "scopes": [
+        "sources/snapshots/"
+      ],
+      "setup_reference": "docs/onboarding.md"
+    },
+    {
+      "id": "repository.read",
+      "provider": "local-git",
+      "mode": "read",
+      "required": true,
+      "scopes": [
+        "catalog-design",
+        "catalog-api"
+      ],
+      "setup_reference": "docs/onboarding.md"
+    },
+    {
+      "id": "review.verify",
+      "provider": "github-read",
+      "mode": "verify",
+      "required": false,
+      "scopes": [
+        "catalog-design"
+      ],
+      "setup_reference": "docs/onboarding.md"
+    }
+  ],
+  "reviewer_roles": {
+    "engineering": [
+      "example-engineer"
+    ],
+    "qa": [
+      "example-qa"
+    ],
+    "architecture": [
+      "example-architect"
+    ]
+  },
+  "required_review_roles": [],
+  "limits": {
+    "max_artifacts": 5000,
+    "max_metadata_bytes": 1048576,
+    "max_source_bytes": 10485760
+  },
+  "required_artifact_types": []
+}

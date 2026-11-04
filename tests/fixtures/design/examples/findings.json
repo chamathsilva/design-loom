@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "change_id": "CHANGE-001",
+  "reviewed_artifacts": [
+    {
+      "id": "REQDOC-001",
+      "sha256": "0470e06bd99b7a9be5352f476dd1b8719bf46d4b724649cb368a50866fd6e31e"
+    },
+    {
+      "id": "CONTRACT-001",
+      "sha256": "0c4d67f22ec6315ad8731f94c471a3598ade1964bedf70f061a4dab287d0fde4"
+    },
+    {
+      "id": "DESIGN-001",
+      "sha256": "7ac21e006f34b3467d2549220719a7d5a60a90fa85523265f68d5c52a913bdd4"
+    },
+    {
+      "id": "QA-001",
+      "sha256": "c69d17edba1562fa8ac0f9860f1f8c208f8109b24bd8f58f5045355dbcf005eb"
+    },
+    {
+      "id": "SHARED-STATUS-001",
+      "sha256": "0e93c47c04dd587f659e68471de152169a46c0600e0208ccdfe4ce7ecffbbb15"
+    }
+  ],
+  "omitted_artifact_ids": [],
+  "findings": []
+}

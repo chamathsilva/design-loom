@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-loom.example/schemas/v1/effective-config.schema.json",
+  "title": "Design Loom effective configuration",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "configuration": {
+      "type": "object",
+      "properties": {
+        "application": {
+          "$ref": "https://design-loom.example/schemas/v1/application.schema.json"
+        },
+        "framework_lock": {
+          "$ref": "https://design-loom.example/schemas/v1/framework-lock.schema.json"
+        },
+        "artifact_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "core_rule_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^DL[0-9]{3}$"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "workflows": {
+          "type": "array",
+          "items": {
+            "$ref": "https://design-loom.example/schemas/v1/workflow.schema.json"
+          },
+          "minItems": 1
+        },
+        "templates": {
+          "type": "array",
+          "items": {
+            "$ref": "https://design-loom.example/schemas/v1/template.schema.json"
+          },
+          "minItems": 1
+        },
+        "extensions": {
+          "type": "array",
+          "items": {
+            "$ref": "https://design-loom.example/schemas/v1/extension.schema.json"
+          }
+        }
+      },
+      "required": [
+        "application",
+        "framework_lock",
+        "artifact_types",
+        "core_rule_ids",
+        "workflows",
+        "templates",
+        "extensions"
+      ],
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pointer": {
+            "type": "string",
+            "pattern": "^/(?:[^~/]|~[01])*(?:/(?:[^~/]|~[01])*)*$"
+          },
+          "origin": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "pointer",
+          "origin",
+          "sha256"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]*\\.[a-z0-9.-]+$"
+      },
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "configuration",
+    "provenance"
+  ],
+  "additionalProperties": false
+}

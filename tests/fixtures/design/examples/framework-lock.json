@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0",
+  "framework_version": "0.1.0",
+  "engine_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "resources_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "extensions_locked": [],
+  "schema_contract_version": "1.0"
+}

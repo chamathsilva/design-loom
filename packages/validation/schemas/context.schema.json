@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-loom.example/schemas/v1/context.schema.json",
+  "title": "Design Loom consumed context",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "artifact",
+              "source"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "state": {
+            "enum": [
+              "read",
+              "linked",
+              "unavailable"
+            ]
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "artifact-semantic-v1 for artifact references, source-content SHA-256 for source references."
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "state"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "const": "read"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "sha256"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "source"
+                },
+                "state": {
+                  "const": "read"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "revision"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9._-]{1,79}$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "impact": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "description",
+          "impact"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "references",
+    "gaps"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "references": {
+            "contains": {
+              "properties": {
+                "state": {
+                  "const": "unavailable"
+                }
+              },
+              "required": [
+                "state"
+              ]
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "gaps": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ]
+}
