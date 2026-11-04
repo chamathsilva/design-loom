@@ -112,6 +112,10 @@ async function readDocument(
   return { origin, sha256: file.sha256, value: parse(file, origin), file };
 }
 
+/** A descriptor's content_path, or undefined when the descriptor isn't an object (the schema check reports it). */
+const contentPathOf = (value: unknown): unknown =>
+  value !== null && typeof value === "object" ? (value as { content_path?: unknown }).content_path : undefined;
+
 const join = (folder: string, path: string): string => (folder === "" ? path : `${folder}/${path}`);
 
 const REINSTALL = "Reinstall the plugin; its core resources are incomplete.";
@@ -139,7 +143,7 @@ export async function loadRelease(
     const document = await readDocument(release, path, origin(path), REINSTALL);
     inventory.push({ path, sha256: document.sha256 });
     templates.push({ origin: document.origin, sha256: document.sha256, value: document.value });
-    const contentPath = (document.value as { content_path?: unknown }).content_path;
+    const contentPath = contentPathOf(document.value);
     if (typeof contentPath === "string") {
       const content = templateContentPath(path, contentPath);
       const file = await readFileAt(release, content, origin(content), REINSTALL);
@@ -194,7 +198,7 @@ export async function loadExtension(app: SafeFileSystem, folder: string): Promis
     const file = await readFileAt(app, shownAs, shownAs, missing);
     const value = parse(file, shownAs);
     descriptors.set(resource.id, { origin: shownAs, sha256: file.sha256, value });
-    const contentPath = (value as { content_path?: unknown }).content_path;
+    const contentPath = contentPathOf(value);
     if (resource.kind === "template" && typeof contentPath === "string") {
       await addFile(templateContentPath(relative, contentPath));
     }

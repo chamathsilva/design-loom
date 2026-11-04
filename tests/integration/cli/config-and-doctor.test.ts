@@ -183,6 +183,32 @@ describe("config resolve", () => {
     assert.deepEqual(codes(stale.envelope), ["CONFIG_EXTENSION_LOCK_MISMATCH"]);
   });
 
+  test("an extension descriptor that is JSON null is invalid configuration, not a crash", async () => {
+    const root = await application();
+    const folder = join(root, "extensions", "nulls");
+    await mkdir(folder, { recursive: true });
+    await writeFile(join(folder, "flow.json"), "null");
+    await writeFile(
+      join(folder, "extension.json"),
+      json({
+        schema_version: "1.0",
+        id: "example.nulls",
+        version: "0.1.0",
+        framework_range: ">=0.1.0 <0.2.0",
+        requires: [],
+        resources: [{ id: "example.flow", kind: "workflow", path: "flow.json" }],
+        rules: [],
+      }),
+    );
+    await editJson(join(root, ".design-loom", "app.json"), (value) => {
+      value.extension_paths = ["extensions/nulls"];
+    });
+    const { code, envelope } = await run(["config", "resolve", "--root", root]);
+    assert.equal(code, EXIT.invalid, JSON.stringify(envelope.diagnostics));
+    assert.ok(!codes(envelope).includes("CLI_INTERNAL_ERROR"));
+    assert.ok(codes(envelope).includes("CONFIG_SCHEMA_INVALID"));
+  });
+
   test("a missing application profile is invalid configuration", async () => {
     const root = await application();
     await rm(join(root, ".design-loom", "app.json"));
