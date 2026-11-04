@@ -10,6 +10,12 @@ export {
   type SafeFsErrorCode,
   type WriteOptions,
 } from "./safe-fs.ts";
-export { readStoreIndex, type StoreScan, scanStore } from "./store-reader.ts";
+export {
+  DEFAULT_MAX_REFERENCED_BYTES,
+  readStoreIndex,
+  type ScanOptions,
+  type StoreScan,
+  scanStore,
+} from "./store-reader.ts";
 
 export const PACKAGE_NAME = "@design-loom/integrations";

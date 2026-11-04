@@ -97,7 +97,9 @@ describe("current baseline selection (AT-43)", () => {
 describe("lineage checks", () => {
   test("a valid lineage has no diagnostics", () => {
     const report = analyzeLineage([baseline("B1"), baseline("B2", ["B1"])]);
-    assert.deepEqual(report, { diagnostics: [], invalidChanges: [] });
+    assert.deepEqual(report.diagnostics, []);
+    assert.deepEqual(report.invalidChanges, []);
+    assert.equal(report.byChange.size, 0);
   });
 
   test("cycles are rejected and block selection for that change only", () => {
@@ -116,7 +118,33 @@ describe("lineage checks", () => {
   test("a longer cycle is reported once", () => {
     const report = analyzeLineage([baseline("B1", ["B3"]), baseline("B2", ["B1"]), baseline("B3", ["B2"])]);
     assert.equal(report.diagnostics.length, 1);
-    assert.deepEqual(report.diagnostics[0]?.evidence, ["B1", "B3", "B2"]);
+    assert.deepEqual(report.diagnostics[0]?.evidence, ["B1", "B2", "B3"]);
+  });
+
+  test("one change's problems never appear in another change's result, even with similar paths", () => {
+    const a = { ...baseline("X", ["X"]), path: "baselines/X.json" };
+    const b = { ...baseline("X.json", ["X.json"], "CHANGE-002"), path: "baselines/X.json.json" };
+    const forA = selectCurrentBaseline([a, b], "CHANGE-001", eligible());
+    assert.equal(forA.state, "invalid");
+    assert.deepEqual(forA.state === "invalid" ? forA.diagnostics.map((entry) => entry.path) : [], [
+      "baselines/X.json#/supersedes/0",
+    ]);
+  });
+
+  test("long lineages don't overflow the stack", () => {
+    const chain = Array.from({ length: 20000 }, (_, i) => baseline(`B${i}`, i === 0 ? undefined : [`B${i - 1}`]));
+    const all = chain.map((entry) => entry.id);
+    assert.deepEqual(selectCurrentBaseline(chain, "CHANGE-001", eligible(...all)), {
+      state: "current",
+      baselineId: "B19999",
+    });
+    const loop = chain.map((entry, i) => (i === 0 ? { ...entry, supersedes: ["B19999"] } : entry));
+    const report = analyzeLineage(loop);
+    assert.deepEqual(
+      report.diagnostics.map((entry) => entry.code),
+      ["LINEAGE_CYCLE"],
+    );
+    assert.equal(report.diagnostics[0]?.evidence.length, 20000);
   });
 
   const invalid: [string, LineageBaseline[], string][] = [

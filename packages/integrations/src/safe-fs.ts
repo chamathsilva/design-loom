@@ -131,6 +131,16 @@ export class SafeFileSystem {
    * on-disk name exactly, so a read that works on a case-insensitive disk also works on Linux.
    */
   async readBytes(relativePath: string): Promise<Uint8Array> {
+    return new Uint8Array(await readFile(await this.realFile(relativePath)));
+  }
+
+  /** Size in bytes of a file, with the same checks as readBytes, so callers can refuse huge files unread. */
+  async sizeOf(relativePath: string): Promise<number> {
+    return (await lstat(await this.realFile(relativePath))).size;
+  }
+
+  /** Real path of an existing regular file inside the root, named with its exact case. */
+  private async realFile(relativePath: string): Promise<string> {
     const target = this.resolve(relativePath);
     await this.assertExactNames(normalizeRelativePath(relativePath), relativePath);
     let real: string;
@@ -144,7 +154,7 @@ export class SafeFileSystem {
       throw new SafeFsError("outside-root", `${relativePath} resolves outside the root`);
     }
     if (!(await lstat(real)).isFile()) throw new SafeFsError("not-a-file", `${relativePath} is not a file`);
-    return new Uint8Array(await readFile(real));
+    return real;
   }
 
   /**
