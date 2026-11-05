@@ -13,6 +13,21 @@ export {
   transitiveDependents,
 } from "./graph.ts";
 export {
+  type ArtifactPlan,
+  type ArtifactRequest,
+  type ArtifactScopeRequest,
+  type ChangeRequest,
+  type FileDigest,
+  type Plan,
+  type PlannedFile,
+  planArtifact,
+  planChange,
+  type RegistrationConfig,
+  registrationConfigOf,
+  serializeRecord,
+  uncheckableStoreProblems,
+} from "./registration.ts";
+export {
   ARTIFACT_SEMANTIC_CONTRACT,
   ArtifactSemanticError,
   type ArtifactSemanticInput,
@@ -50,5 +65,4 @@ export {
   type StoreLocation,
   type StoreRecordKind,
 } from "./store-layout.ts";
-
 export const PACKAGE_NAME = "@design-loom/artifacts";

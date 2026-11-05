@@ -4,13 +4,14 @@
  * short human-readable summary. Never prompts.
  */
 
-import { parseArgs } from "node:util";
 import { type Diagnostic, diagnostic } from "@design-loom/config";
 import { osErrorCode } from "@design-loom/integrations";
 import { type CommandOutcome, configResolve } from "./commands/config-resolve.ts";
 import { doctor } from "./commands/doctor.ts";
+import { artifactRegister, changeInit } from "./commands/register.ts";
 import { type CliContext, CommandFailure, frameworkVersionOf, inputDigests } from "./context.ts";
 import { buildEnvelope, EXIT, type ExitCode, type ResultEnvelope } from "./envelope.ts";
+import { type Options, parseOptions, recordedOptions } from "./options.ts";
 
 function internalErrorMessage(error: unknown): string {
   const code = osErrorCode(error);
@@ -25,13 +26,20 @@ export interface CliIo {
 const USAGE = `Usage:
   design-loom config resolve --root <absolute-path> [--json]
   design-loom doctor --root <absolute-path> [--workflow <id>] [--json]
+  design-loom change init --root <absolute-path> --id <id> --workflow <id> --title <text>
+      [--summary <text>] [--owner-role <role>]... [--requirement <id>]... [--source <id>]...
+      [--repository <id>]... [--exclude <text>]... [--json]
+  design-loom artifact register --root <absolute-path> --id <id> --type <type> --content <path>
+      (--change <id> | --scope project) [--title <text>] [--owner-role <role>] [--step <id>]
+      [--depends-on <id>]... [--source <id>]... [--requirement <id>]...
+      [--covered-change <id>]... [--attachment <path>]... [--json]
 `;
-
-type Options = { root?: string; workflow?: string; json?: boolean };
 
 const COMMANDS: Record<string, (options: Options, context: CliContext) => Promise<CommandOutcome>> = {
   "config resolve": configResolve,
   doctor,
+  "change init": changeInit,
+  "artifact register": artifactRegister,
 };
 
 function summarize(envelope: ResultEnvelope): string {
@@ -42,27 +50,19 @@ function summarize(envelope: ResultEnvelope): string {
   const result = envelope.result as {
     effective_config_digest?: string | null;
     capabilities?: { id: string; state: string }[];
+    written?: { path: string }[];
   };
   if (result?.effective_config_digest) lines.push(`  effective_config_digest ${result.effective_config_digest}`);
   for (const capability of result?.capabilities ?? []) lines.push(`  capability ${capability.id}: ${capability.state}`);
+  for (const file of result?.written ?? []) lines.push(`  wrote ${file.path}`);
   return `${lines.join("\n")}\n`;
 }
 
 /** Runs the CLI and returns its exit code. */
 export async function runCli(argv: readonly string[], io: CliIo, context: CliContext): Promise<ExitCode> {
-  let parsed: ReturnType<
-    typeof parseArgs<{
-      options: { root: { type: "string" }; workflow: { type: "string" }; json: { type: "boolean" } };
-      allowPositionals: true;
-    }>
-  >;
+  let parsed: ReturnType<typeof parseOptions>;
   try {
-    parsed = parseArgs({
-      args: [...argv],
-      options: { root: { type: "string" }, workflow: { type: "string" }, json: { type: "boolean" } },
-      allowPositionals: true,
-      strict: true,
-    });
+    parsed = parseOptions(argv);
   } catch (error) {
     io.stderr(`${(error as Error).message}\n${USAGE}`);
     // --json promises one envelope on stdout, even when the arguments can't be parsed.
@@ -86,7 +86,7 @@ export async function runCli(argv: readonly string[], io: CliIo, context: CliCon
     }
     return EXIT.invalid;
   }
-  const options: Options = parsed.values;
+  const { options } = parsed;
   const name = parsed.positionals.join(" ");
   const command = COMMANDS[name];
   const json = options.json === true;
@@ -124,7 +124,7 @@ export async function runCli(argv: readonly string[], io: CliIo, context: CliCon
     status: outcome.status,
     root: options.root ?? "",
     frameworkVersion: frameworkVersionOf(outcome.resolution),
-    options: { workflow: options.workflow ?? null },
+    options: recordedOptions(options),
     inputs: [...inputDigests(outcome.resolution), ...(outcome.additionalInputs ?? [])],
     diagnostics: outcome.diagnostics,
     result: outcome.result,
