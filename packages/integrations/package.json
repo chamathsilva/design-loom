@@ -8,6 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@design-loom/artifacts": "0.0.0",
     "@design-loom/config": "0.0.0"
   }
 }
