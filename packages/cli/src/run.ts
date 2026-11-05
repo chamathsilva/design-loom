@@ -6,10 +6,16 @@
 
 import { parseArgs } from "node:util";
 import { type Diagnostic, diagnostic } from "@design-loom/config";
+import { osErrorCode } from "@design-loom/integrations";
 import { type CommandOutcome, configResolve } from "./commands/config-resolve.ts";
 import { doctor } from "./commands/doctor.ts";
 import { type CliContext, CommandFailure, frameworkVersionOf, inputDigests } from "./context.ts";
 import { buildEnvelope, EXIT, type ExitCode, type ResultEnvelope } from "./envelope.ts";
+
+function internalErrorMessage(error: unknown): string {
+  const code = osErrorCode(error);
+  return code === null ? "unexpected internal error" : `unexpected internal error (${code})`;
+}
 
 export interface CliIo {
   stdout: (text: string) => void;
@@ -103,7 +109,9 @@ export async function runCli(argv: readonly string[], io: CliIo, context: CliCon
       } else {
         io.stderr(`${(error as Error).stack ?? String(error)}\n`);
         outcome = failed(EXIT.internal, [
-          diagnostic("CLI_INTERNAL_ERROR", "error", (error as Error).message ?? "internal error", {
+          // OS error messages carry absolute local paths, so the envelope gets the error code only;
+          // the full message and stack stay on stderr.
+          diagnostic("CLI_INTERNAL_ERROR", "error", internalErrorMessage(error), {
             remediation: "Report this as a defect, with the stderr output.",
           }),
         ]);

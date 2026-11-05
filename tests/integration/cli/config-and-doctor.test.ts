@@ -518,3 +518,28 @@ describe("doctor", () => {
     assert.ok(codes(envelope).includes("DOCTOR_ENGINE_UNVERIFIED"));
   });
 });
+
+describe("internal errors", () => {
+  test("an unexpected OS error reports its code, not its message with the local path", async () => {
+    const secret = join(scratch, "private", "file.json");
+    const failing = context();
+    Object.defineProperty(failing, "nodeVersion", {
+      get: () => {
+        throw Object.assign(new Error(`EACCES: permission denied, open '${secret}'`), { code: "EACCES" });
+      },
+    });
+    let stdout = "";
+    let stderr = "";
+    const code = await runCli(
+      ["doctor", "--root", await application(), "--json"],
+      { stdout: (text) => (stdout += text), stderr: (text) => (stderr += text) },
+      failing,
+    );
+    const envelope = JSON.parse(stdout) as ResultEnvelope;
+    assert.equal(code, EXIT.internal);
+    const internal = envelope.diagnostics.find((entry) => entry.code === "CLI_INTERNAL_ERROR");
+    assert.equal(internal?.message, "unexpected internal error (EACCES)");
+    assert.ok(!diagnosticsMention(envelope, secret));
+    assert.ok(stderr.includes("EACCES"), "the full error still goes to stderr");
+  });
+});

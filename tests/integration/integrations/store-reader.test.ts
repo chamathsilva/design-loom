@@ -202,6 +202,22 @@ describe("store reader", () => {
     assert.equal(small.referenced.get("changes/CHANGE-001/content/engineering.md"), null);
   });
 
+  test("a file that grew after it was measured is still held to the size limit", async () => {
+    const root = await writeRepository("grew");
+    const fs = await SafeFileSystem.open(root);
+    // Every size check reports 1 byte, as if each file grew before it was read.
+    fs.sizeOf = async () => 1;
+    const records = await scanStore(fs, { maxMetadataBytes: 64 });
+    const record = records.records.find((file) => file.path.endsWith(".json") && file.size > 64);
+    assert.ok(record, "a record larger than the limit was read");
+    assert.equal(record.sha256, "");
+    assert.equal(record.value, undefined);
+
+    const references = await scanStore(fs, { maxReferencedBytes: 10 });
+    assert.ok(references.diagnostics.some((entry) => entry.code === "STORE_REFERENCE_TOO_LARGE"));
+    assert.equal(references.referenced.get("changes/CHANGE-001/content/engineering.md"), null);
+  });
+
   test("listDirectory sorts entries and refuses paths outside the root", async () => {
     const root = await writeRepository("listing");
     const fs = await SafeFileSystem.open(root);

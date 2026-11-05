@@ -160,8 +160,11 @@ export async function scanStore(fs: SafeFileSystem, options: ScanOptions = {}): 
   const referenced = new Map<string, string | null>();
   for (const path of referencedFiles(records)) {
     try {
-      const size = await fs.sizeOf(path);
-      if (size > maxReferencedBytes) {
+      // The pre-check avoids reading huge files; the check after reading covers a file that grew in between.
+      const measured = await fs.sizeOf(path);
+      const bytes = measured > maxReferencedBytes ? null : await fs.readBytes(path);
+      const size = bytes?.byteLength ?? measured;
+      if (bytes === null || size > maxReferencedBytes) {
         referenced.set(path, null);
         diagnostics.push(
           diagnostic(
@@ -176,7 +179,7 @@ export async function scanStore(fs: SafeFileSystem, options: ScanOptions = {}): 
         );
         continue;
       }
-      referenced.set(path, sha256Hex(await fs.readBytes(path)));
+      referenced.set(path, sha256Hex(bytes));
     } catch (error) {
       const problem = fsProblem(error, path);
       if (problem === null) throw error;
@@ -201,6 +204,8 @@ async function readRecord(fs: SafeFileSystem, path: string, maxBytes: number): P
     const size = await fs.sizeOf(path);
     if (size > maxBytes) return { path, sha256: "", size };
     bytes = await fs.readBytes(path);
+    // The file may have grown after it was measured.
+    if (bytes.byteLength > maxBytes) return { path, sha256: "", size: bytes.byteLength };
   } catch (error) {
     const problem = fsProblem(error, path);
     if (problem === null) throw error;
