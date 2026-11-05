@@ -17,6 +17,19 @@
 | `npm run typecheck` | Type-check all packages and tests |
 | `npm test` | Run the test suite |
 
+## Running the CLI from source
+
+Node runs the TypeScript sources directly, so no build is needed:
+
+```sh
+node packages/cli/src/main.ts doctor --root /absolute/path/to/design-repo --json
+node packages/cli/src/main.ts config resolve --root /absolute/path/to/design-repo --json
+```
+
+With `--json`, stdout carries exactly one result envelope: the run-report fields from `run.schema.json` plus `result`, the command's own data. The exit codes follow design doc 07: 0 ok, 1 gate failed, 2 invalid configuration or invocation, 3 capability unavailable, 4 stale or conflicting lock, 5 internal error.
+
+From source there is no engine bundle to hash, so `doctor` always reports the engine as unverified (exit 3). The release build (B11) bundles the CLI and binds the engine digest.
+
 ## Toolchain decisions (B01)
 
 | Choice | Why |

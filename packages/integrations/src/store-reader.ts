@@ -26,7 +26,7 @@ import {
   sha256Hex,
   sortDiagnostics,
 } from "@design-loom/config";
-import { type SafeFileSystem, SafeFsError } from "./safe-fs.ts";
+import { osErrorCode, type SafeFileSystem, SafeFsError } from "./safe-fs.ts";
 
 export interface StoreScan {
   records: StoreFile[];
@@ -48,8 +48,8 @@ const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
  */
 function fsProblem(error: unknown, path: string): string | null {
   if (error instanceof SafeFsError) return error.message;
-  const code = (error as NodeJS.ErrnoException | undefined)?.code;
-  return typeof code === "string" && /^E[A-Z]+$/.test(code) ? `${path || "."} can't be read (${code})` : null;
+  const code = osErrorCode(error);
+  return code === null ? null : `${path || "."} can't be read (${code})`;
 }
 
 /** Lists and reads the store. Missing scan roots are fine: a new repository has none. */

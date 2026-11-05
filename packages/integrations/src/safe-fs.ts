@@ -59,6 +59,15 @@ export interface WriteOptions {
   expectedSha256?: string;
 }
 
+/**
+ * The code of an OS error such as EACCES, ELOOP or EIO, or null for anything else. OS errors are
+ * something the user can fix; their messages name absolute local paths, so report the code instead.
+ */
+export function osErrorCode(error: unknown): string | null {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  return typeof code === "string" && /^E[A-Z]+$/.test(code) ? code : null;
+}
+
 function errorCode(error: unknown): string | undefined {
   return (error as NodeJS.ErrnoException | undefined)?.code;
 }
