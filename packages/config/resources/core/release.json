@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "framework_version": "0.1.0",
+  "artifact_types": [
+    "contract",
+    "engineering-design",
+    "implementation-evidence",
+    "requirements",
+    "review",
+    "test-design"
+  ],
+  "core_rule_ids": [
+    "DL001",
+    "DL002",
+    "DL003",
+    "DL004",
+    "DL005",
+    "DL006",
+    "DL007",
+    "DL008",
+    "DL009",
+    "DL010",
+    "DL011",
+    "DL012",
+    "DL013",
+    "DL014",
+    "DL015",
+    "DL016"
+  ],
+  "workflows": ["workflows/core.feature-design.json"],
+  "templates": [
+    "templates/contract.template.json",
+    "templates/engineering-design.template.json",
+    "templates/implementation-evidence.template.json",
+    "templates/requirements.template.json",
+    "templates/review.template.json",
+    "templates/test-design.template.json"
+  ]
+}

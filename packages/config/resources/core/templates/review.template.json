@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "id": "core.review",
+  "version": "0.1.0",
+  "artifact_type": "review",
+  "content_path": "review.md",
+  "sections": [
+    {
+      "key": "context-used",
+      "heading": "Context used",
+      "required": true,
+      "guidance": "Identify source and artifact revisions actually read, linked or unavailable, plus assumptions and context gaps."
+    },
+    {
+      "key": "reviewed-scope",
+      "heading": "Reviewed scope",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "reviewed-revisions",
+      "heading": "Reviewed revisions",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "automated-checks",
+      "heading": "Automated checks",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "findings",
+      "heading": "Findings",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "coverage",
+      "heading": "Coverage",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "omitted-scope",
+      "heading": "Omitted scope",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    },
+    {
+      "key": "decisions-and-recommendation",
+      "heading": "Decisions and recommendation",
+      "required": true,
+      "guidance": "Provide evidence and specific decisions; explain non-applicability explicitly."
+    }
+  ]
+}
