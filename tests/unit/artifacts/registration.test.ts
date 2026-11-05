@@ -47,6 +47,37 @@ describe("registration configuration", () => {
   });
 });
 
+const UNPORTABLE = ["NUL", "nul", "CON", "PRN", "AUX", "COM1", "lpt9", "NUL.txt", "CHANGE-1.", "CHANGE-1.."];
+
+describe("IDs that aren't portable", () => {
+  test("are refused for changes and artifacts alike", () => {
+    for (const id of UNPORTABLE) {
+      const change = planChange({ id, title: "T", workflowId: "core.feature-design" }, config, index, []);
+      assert.deepEqual(codes(change), ["REGISTER_UNPORTABLE_ID"], `change ${id}`);
+      assert.deepEqual(change.files, []);
+      const project = planArtifact(
+        {
+          id,
+          type: "contract",
+          scope: { kind: "project" },
+          content: { path: "shared/content/x.md", sha256: DIGEST },
+          ownerRole: "architecture",
+        },
+        config,
+        index,
+      );
+      assert.deepEqual(codes(project), ["REGISTER_UNPORTABLE_ID"], `artifact ${id}`);
+    }
+  });
+
+  test("ordinary look-alikes are accepted", () => {
+    for (const id of ["NULL-1", "CONSOLE", "COM10", "AUXILIARY", "Change.1", "a.b-c_d"]) {
+      const plan = planChange({ id, title: "T", workflowId: "core.feature-design" }, config, index, []);
+      assert.deepEqual(plan.diagnostics, [], id);
+    }
+  });
+});
+
 describe("change init", () => {
   const request = { id: "CHANGE-010", title: "Dashboard API", workflowId: "core.feature-design" };
 

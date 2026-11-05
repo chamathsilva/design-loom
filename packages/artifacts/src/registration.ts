@@ -115,6 +115,26 @@ class Findings {
   }
 }
 
+/**
+ * IDs of changes and artifacts become folder and file names, so they must be valid on every
+ * operating system: no Windows device names (NUL, COM1, even with an extension) and no trailing dot.
+ * The same path policy the file system adapter applies at write time decides, so the two agree.
+ */
+function checkPortableName(out: Findings, label: string, id: string): void {
+  for (const probe of [`changes/${id}/x`, `shared/artifacts/${id}.json`]) {
+    try {
+      normalizeRelativePath(probe);
+    } catch {
+      out.error(
+        "REGISTER_UNPORTABLE_ID",
+        `${label} "${id}" can't be used as a file name on every operating system`,
+        "Avoid Windows device names such as NUL, CON, COM1 or LPT1, and don't end the ID with a dot.",
+      );
+      return;
+    }
+  }
+}
+
 function checkIds(out: Findings, label: string, ids: readonly string[]): void {
   const seen = new Set<string>();
   for (const id of ids) {
@@ -173,6 +193,7 @@ export function planChange(
 ): Plan {
   const out = new Findings();
   checkIds(out, "change ID", [request.id]);
+  checkPortableName(out, "change ID", request.id);
   checkIds(out, "requirement ID", request.requirementIds ?? []);
   checkIds(out, "owner role", request.ownerRoles ?? []);
   if (request.title.trim() === "") out.error("REGISTER_EMPTY_TITLE", "the change title is empty", "Give it a title.");
@@ -501,6 +522,7 @@ export function planArtifact(request: ArtifactRequest, config: RegistrationConfi
   const out = new Findings();
   const { scope } = request;
   checkIds(out, "artifact ID", [request.id]);
+  checkPortableName(out, "artifact ID", request.id);
   checkIds(out, "dependency", request.dependsOn ?? []);
   checkIds(out, "source", request.sourceIds ?? []);
   checkIds(out, "requirement ID", request.requirementIds ?? []);

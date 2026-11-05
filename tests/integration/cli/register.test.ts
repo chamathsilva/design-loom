@@ -147,6 +147,27 @@ describe("change init", () => {
     assert.equal(await exists(root, "changes/CHANGE-100/change.json"), false);
   });
 
+  test("refuses IDs that aren't valid on every OS, without an internal error", async () => {
+    const root = await repository();
+    for (const id of ["NUL", "COM1", "CHANGE-1."]) {
+      const { code, envelope } = await run([
+        "change",
+        "init",
+        "--root",
+        root,
+        "--id",
+        id,
+        "--title",
+        "X",
+        "--workflow",
+        "core.feature-design",
+      ]);
+      assert.equal(code, EXIT.invalid, id);
+      assert.deepEqual(codes(envelope), ["REGISTER_UNPORTABLE_ID"], id);
+    }
+    assert.equal(await exists(root, "changes/NUL/change.json"), false);
+  });
+
   test("refuses unknown workflows and sources without writing anything", async () => {
     const root = await repository();
     const { code, envelope } = await run([

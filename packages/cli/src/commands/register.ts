@@ -14,7 +14,7 @@ import {
   registrationConfigOf,
   type StoreIndex,
 } from "@design-loom/artifacts";
-import { type Diagnostic, diagnostic, normalizeRelativePath, sha256Hex } from "@design-loom/config";
+import { type Diagnostic, diagnostic, normalizeRelativePath, PathPolicyError, sha256Hex } from "@design-loom/config";
 import {
   DEFAULT_MAX_REFERENCED_BYTES,
   osErrorCode,
@@ -112,6 +112,12 @@ function writeFailure(error: unknown, file: PlannedFile, written: readonly Writt
     return diagnostic("REGISTER_WRITE_REFUSED", "error", `${file.path} ${reason}.${partial}`, {
       path: file.path,
       remediation: "Existing files are never overwritten. Choose another ID.",
+    });
+  }
+  if (error instanceof PathPolicyError) {
+    return diagnostic("REGISTER_UNPORTABLE_ID", "error", `${file.path} is not a portable path.${partial}`, {
+      path: file.path,
+      remediation: "Choose an ID that is valid on every operating system.",
     });
   }
   const code = osErrorCode(error);
