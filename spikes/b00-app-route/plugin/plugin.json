@@ -1,0 +1,8 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "design-loom-spike",
+  "version": "0.0.1",
+  "description": "Throwaway B00 spike: checks whether Copilot app skills can reach Design Loom's bundled tools.",
+  "license": "UNLICENSED",
+  "repository": "https://github.com/chamathsilva/design-loom"
+}
