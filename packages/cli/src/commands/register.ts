@@ -13,6 +13,7 @@ import {
   type RegistrationConfig,
   registrationConfigOf,
   type StoreIndex,
+  uncheckableStoreProblems,
 } from "@design-loom/artifacts";
 import { type Diagnostic, diagnostic, normalizeRelativePath, PathPolicyError, sha256Hex } from "@design-loom/config";
 import {
@@ -77,6 +78,9 @@ async function prepare(options: Options, context: CliContext): Promise<Prepared 
       ...(limits.max_metadata_bytes === undefined ? {} : { maxMetadataBytes: limits.max_metadata_bytes }),
     },
   });
+  // A record the index couldn't read might be the very ID being registered, so don't write.
+  const unsound = uncheckableStoreProblems(index);
+  if (unsound.length > 0) return refused(resolution, EXIT.invalid, unsound);
   return { fs, resolution, config, index };
 }
 

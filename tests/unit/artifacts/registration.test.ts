@@ -14,6 +14,7 @@ import {
   type RegistrationConfig,
   registrationConfigOf,
   type StoreIndex,
+  uncheckableStoreProblems,
 } from "@design-loom/artifacts";
 import type { EffectiveConfigEnvelope } from "@design-loom/config";
 import { validateAgainstSchema } from "@design-loom/validation";
@@ -460,5 +461,28 @@ describe("artifact register: project scope", () => {
       const plan = planArtifact({ ...request, content: { path, sha256: DIGEST } }, config, index);
       assert.deepEqual(codes(plan), ["REGISTER_CONTENT_OUTSIDE_SCOPE"], path);
     }
+  });
+});
+
+describe("uncheckable store problems", () => {
+  test("a clean store has none", () => {
+    assert.deepEqual(uncheckableStoreProblems(index), []);
+  });
+
+  test("an unreadable or invalid record blocks registration and is listed", () => {
+    const repo = sampleRepository();
+    repo.set("changes/CHANGE-001/artifacts/BROKEN-001.json", new TextEncoder().encode("{ not json"));
+    const problems = uncheckableStoreProblems(indexOf(repo));
+    assert.equal(problems[0]?.code, "REGISTER_STORE_UNCHECKABLE");
+    assert.ok(problems[0]?.evidence.some((line) => line.endsWith("changes/CHANGE-001/artifacts/BROKEN-001.json")));
+    assert.ok(problems.slice(1).every((entry) => entry.severity === "error"));
+  });
+
+  test("a missing content file doesn't block, because IDs are still checkable", () => {
+    const repo = sampleRepository();
+    repo.delete("changes/CHANGE-001/content/requirements.md");
+    const broken = indexOf(repo);
+    assert.ok(broken.diagnostics.some((entry) => entry.code === "STORE_CONTENT_MISSING"));
+    assert.deepEqual(uncheckableStoreProblems(broken), []);
   });
 });

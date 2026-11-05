@@ -100,6 +100,46 @@ export function registrationConfigOf(envelope: EffectiveConfigEnvelope): Registr
   };
 }
 
+/**
+ * Store problems that leave a record out of the index or make its identity uncertain. While one
+ * exists, a new ID can't be checked for uniqueness, so registration must not write: the unreadable
+ * file might be the very change or artifact being registered. Other store errors (a missing content
+ * file, a dependency cycle) don't affect what an ID means, so they don't block unrelated work.
+ */
+const UNCHECKABLE = new Set([
+  "STORE_RECORD_UNREADABLE",
+  "STORE_RECORD_TOO_LARGE",
+  "STORE_SCHEMA_INVALID",
+  "STORE_FOLDER_UNREADABLE",
+  "STORE_FOLDER_TOO_DEEP",
+  "STORE_UNSAFE_PATH",
+  "STORE_UNSAFE_NAME",
+  "STORE_SYMLINK_IGNORED",
+  "STORE_LIMIT_EXCEEDED",
+  "STORE_ID_MISMATCH",
+  "STORE_APPLICATION_MISMATCH",
+  "STORE_DUPLICATE_ID",
+]);
+
+/** A refusal for each store problem that makes ID checks unreliable; empty when registration is safe. */
+export function uncheckableStoreProblems(index: StoreIndex): Diagnostic[] {
+  const problems = index.diagnostics.filter((entry) => entry.severity === "error" && UNCHECKABLE.has(entry.code));
+  if (problems.length === 0) return [];
+  return [
+    diagnostic(
+      "REGISTER_STORE_UNCHECKABLE",
+      "error",
+      "the design repository has records that can't be read, so new IDs can't be checked for uniqueness",
+      {
+        evidence: problems.map((entry) => `${entry.code} ${entry.path}`.trim()),
+        remediation:
+          "Fix or remove the unreadable records listed, then run the command again. See the diagnostics below.",
+      },
+    ),
+    ...problems,
+  ];
+}
+
 /** Pretty-printed JSON with a trailing newline, the way the design's examples are stored. */
 export function serializeRecord(value: unknown): Uint8Array {
   return new TextEncoder().encode(`${JSON.stringify(value, null, 2)}\n`);

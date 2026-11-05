@@ -605,3 +605,87 @@ describe("artifact register: project scope and ownership", () => {
     assert.deepEqual(codes(envelope), ["CLI_TOO_MANY_OPTIONS"]);
   });
 });
+
+describe("a repository with records that can't be read", () => {
+  async function twoChanges(): Promise<string> {
+    const root = await withChange();
+    const other = await run([
+      "change",
+      "init",
+      "--root",
+      root,
+      "--id",
+      "CHANGE-101",
+      "--workflow",
+      "core.feature-design",
+      "--title",
+      "Other",
+    ]);
+    assert.equal(other.code, EXIT.ok);
+    return root;
+  }
+
+  test("refuses to register an ID an unreadable sidecar might already hold", async () => {
+    const root = await twoChanges();
+    await saveContent(root, "changes/CHANGE-100/content/design.md");
+    // Another change holds a sidecar that doesn't parse. It might be DESIGN-100.
+    await saveContent(root, "changes/CHANGE-101/artifacts/DESIGN-100.json", "{ not json");
+    const { code, envelope } = await register(
+      root,
+      "--change",
+      "CHANGE-100",
+      "--content",
+      "changes/CHANGE-100/content/design.md",
+    );
+    assert.equal(code, EXIT.invalid);
+    assert.equal(envelope.status, "failed");
+    assert.deepEqual(codes(envelope), ["REGISTER_STORE_UNCHECKABLE", "STORE_RECORD_UNREADABLE"]);
+    assert.ok(
+      envelope.diagnostics[0]?.evidence.some((line) => line.includes("changes/CHANGE-101/artifacts/DESIGN-100.json")),
+    );
+    assert.equal(await exists(root, "changes/CHANGE-100/artifacts/DESIGN-100.json"), false);
+  });
+
+  test("refuses change init the same way, and a record that breaks its schema counts too", async () => {
+    const root = await twoChanges();
+    await writeFile(join(root, "changes", "CHANGE-101", "change.json"), "[]");
+    const { code, envelope } = await run([...CHANGE.slice(0, 3), "CHANGE-200", ...CHANGE.slice(4), "--root", root]);
+    assert.equal(code, EXIT.invalid);
+    assert.ok(codes(envelope).includes("REGISTER_STORE_UNCHECKABLE"), codes(envelope).join());
+    assert.equal(await exists(root, "changes/CHANGE-200/change.json"), false);
+  });
+
+  test("a problem that doesn't affect what an ID means doesn't block unrelated work", async () => {
+    const root = await withChange();
+    await saveContent(root, "changes/CHANGE-100/content/design.md");
+    assert.equal(
+      (await register(root, "--change", "CHANGE-100", "--content", "changes/CHANGE-100/content/design.md")).code,
+      EXIT.ok,
+    );
+    // The first artifact's content goes missing: an error for that artifact, but IDs are still checkable.
+    await rm(join(root, "changes", "CHANGE-100", "content", "design.md"));
+    const index = await readStoreIndex(await SafeFileSystem.open(root), { applicationId: "sample-catalog" });
+    assert.ok(
+      index.diagnostics.some((entry) => entry.severity === "error"),
+      "the store has an error",
+    );
+    await saveContent(root, "changes/CHANGE-100/content/second.md", "# Second\n");
+    const second = await run([
+      "artifact",
+      "register",
+      "--root",
+      root,
+      "--id",
+      "DESIGN-101",
+      "--type",
+      "engineering-design",
+      "--owner-role",
+      "engineering",
+      "--change",
+      "CHANGE-100",
+      "--content",
+      "changes/CHANGE-100/content/second.md",
+    ]);
+    assert.equal(second.code, EXIT.ok, JSON.stringify(second.envelope.diagnostics));
+  });
+});

@@ -25,6 +25,7 @@ export {
   type RegistrationConfig,
   registrationConfigOf,
   serializeRecord,
+  uncheckableStoreProblems,
 } from "./registration.ts";
 export {
   ARTIFACT_SEMANTIC_CONTRACT,
