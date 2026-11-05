@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
@@ -320,6 +320,25 @@ describe("artifact register: change scope", () => {
     const again = await register(root, ...args, "--title", "Changed");
     assert.equal(again.code, EXIT.invalid);
     assert.deepEqual(codes(again.envelope), ["ARTIFACT_EXISTS"]);
+    assert.deepEqual(await readFile(join(root, ...path.split("/"))), before);
+
+    // The same ID in another case is the same artifact on a case-insensitive disk, so it is refused too.
+    const lower = await run([
+      "artifact",
+      "register",
+      "--root",
+      root,
+      "--id",
+      "design-100",
+      "--type",
+      "engineering-design",
+      "--owner-role",
+      "engineering",
+      ...args,
+    ]);
+    assert.equal(lower.code, EXIT.invalid);
+    assert.deepEqual(codes(lower.envelope), ["ARTIFACT_EXISTS"]);
+    assert.deepEqual(await readdir(join(root, "changes", "CHANGE-100", "artifacts")), ["DESIGN-100.json"]);
     assert.deepEqual(await readFile(join(root, ...path.split("/"))), before);
   });
 

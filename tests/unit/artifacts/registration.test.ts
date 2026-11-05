@@ -15,17 +15,13 @@ import {
   registrationConfigOf,
   type StoreIndex,
 } from "@design-loom/artifacts";
-import type { EffectiveConfiguration } from "@design-loom/config";
+import type { EffectiveConfigEnvelope } from "@design-loom/config";
 import { validateAgainstSchema } from "@design-loom/validation";
 import { editRecord, sampleRepository, storeInput } from "../../support/sample-store.ts";
 
 const EXAMPLES = join(import.meta.dirname, "..", "..", "fixtures", "design", "examples");
-const configuration = (
-  JSON.parse(readFileSync(join(EXAMPLES, "effective-config.json"), "utf8")) as {
-    configuration: EffectiveConfiguration;
-  }
-).configuration;
-const config = registrationConfigOf(configuration);
+const envelope = JSON.parse(readFileSync(join(EXAMPLES, "effective-config.json"), "utf8")) as EffectiveConfigEnvelope;
+const config = registrationConfigOf(envelope);
 const DIGEST = "c".repeat(64);
 
 const indexOf = (repo = sampleRepository()): StoreIndex => buildStoreIndex(storeInput(repo));
@@ -336,12 +332,43 @@ describe("artifact register: change scope", () => {
     assert.deepEqual(codes(plan).sort(), ["REGISTER_DEPENDENCY_UNVERIFIED", "REGISTER_SOURCE_UNVERIFIED"]);
   });
 
+  test("the release's template is told from an extension's by where it was loaded, not by its ID", () => {
+    const fromExtension = { id: "core.engineering-design", version: "9.9.9", artifactType: "engineering-design" };
+    const release = config.templates.find((template) => template.artifactType === "engineering-design");
+    assert.equal(release?.release, true, "the fixture's own template is the release's");
+
+    // Without a selection, an extension template of the same type doesn't compete with the release's,
+    // even when its ID begins with "core.".
+    const withExtension: RegistrationConfig = {
+      ...config,
+      templates: [...config.templates, { ...fromExtension, id: "core.lookalike", release: false }],
+    };
+    assert.equal(decode(planArtifact(request, withExtension, index), path).template_id, "core.engineering-design");
+
+    // With only an extension template of the type, nothing resolves, whatever its ID.
+    const onlyExtension: RegistrationConfig = {
+      ...config,
+      templates: [
+        ...config.templates.filter((template) => template.artifactType !== "engineering-design"),
+        { ...fromExtension, release: false },
+      ],
+    };
+    assert.deepEqual(codes(planArtifact(request, onlyExtension, index)), ["REGISTER_TEMPLATE_UNRESOLVED"]);
+
+    // Selecting the extension's template is how an application opts in.
+    const selected: RegistrationConfig = {
+      ...onlyExtension,
+      templateSelections: { "engineering-design": "core.engineering-design" },
+    };
+    assert.equal(decode(planArtifact(request, selected, index), path).template_version, "9.9.9");
+  });
+
   test("the application's template selection wins, and an unresolved one is refused", () => {
     const selected: RegistrationConfig = {
       ...config,
       templates: [
         ...config.templates,
-        { id: "acme.engineering", version: "2.0.0", artifactType: "engineering-design" },
+        { id: "acme.engineering", version: "2.0.0", artifactType: "engineering-design", release: false },
       ],
       templateSelections: { "engineering-design": "acme.engineering" },
     };

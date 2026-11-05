@@ -68,7 +68,7 @@ async function prepare(options: Options, context: CliContext): Promise<Prepared 
     return refused(resolution, EXIT.stale, diagnostics, "blocked");
   }
   const configuration = result.envelope.configuration;
-  const config = registrationConfigOf(configuration);
+  const config = registrationConfigOf(result.envelope);
   const limits = (configuration.application.limits ?? {}) as { max_artifacts?: number; max_metadata_bytes?: number };
   const index = await readStoreIndex(fs, {
     applicationId: config.applicationId,
@@ -247,8 +247,7 @@ export async function artifactRegister(options: Options, context: CliContext): P
   let attachments: { path: string; sha256: string }[];
   try {
     content = await digestOf(prepared.fs, "content", options.content as string);
-    attachments = [];
-    for (const path of options.attachment) attachments.push(await digestOf(prepared.fs, "attachment", path));
+    attachments = await Promise.all(options.attachment.map((path) => digestOf(prepared.fs, "attachment", path)));
   } catch (error) {
     if (!(error instanceof CommandFailure)) throw error;
     return refused(prepared.resolution, error.exitCode, error.diagnostics);

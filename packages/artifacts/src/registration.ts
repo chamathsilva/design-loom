@@ -11,9 +11,10 @@
 
 import {
   caseFoldKey,
+  compareCodePoints,
   type Diagnostic,
   diagnostic,
-  type EffectiveConfiguration,
+  type EffectiveConfigEnvelope,
   hasErrors,
   normalizeRelativePath,
   sortDiagnostics,
@@ -52,7 +53,8 @@ export interface RegistrationConfig {
   repositoryIds: string[];
   artifactTypes: string[];
   workflows: { id: string; version: string; steps: { id: string; requiredOutputs: string[] }[] }[];
-  templates: { id: string; version: string; artifactType: string }[];
+  /** `release` is true for the plugin's own templates, whatever their IDs, from the configuration's provenance. */
+  templates: { id: string; version: string; artifactType: string; release: boolean }[];
   templateSelections: Record<string, string>;
 }
 
@@ -63,7 +65,9 @@ const asString = (value: unknown): string => (typeof value === "string" ? value 
 const strings = (value: unknown): string[] => asArray(value).filter((item): item is string => typeof item === "string");
 
 /** Reads the registration view from a resolved (and therefore schema-valid) configuration. */
-export function registrationConfigOf(configuration: EffectiveConfiguration): RegistrationConfig {
+export function registrationConfigOf(envelope: EffectiveConfigEnvelope): RegistrationConfig {
+  const { configuration } = envelope;
+  const origins = new Map(envelope.provenance.map((entry) => [entry.pointer, entry.origin]));
   const application = asObject(configuration.application);
   const roles = new Set<string>(Object.keys(asObject(application.reviewer_roles)));
   for (const repository of asArray(application.repositories)) {
@@ -73,7 +77,7 @@ export function registrationConfigOf(configuration: EffectiveConfiguration): Reg
   return {
     applicationId: asString(application.application_id),
     frameworkVersion: asString(application.framework_version),
-    knownRoles: [...roles].sort(),
+    knownRoles: [...roles].sort(compareCodePoints),
     repositoryIds: asArray(application.repositories).map((repository) => asString(asObject(repository).id)),
     artifactTypes: configuration.artifact_types,
     workflows: configuration.workflows.map((workflow) => ({
@@ -84,10 +88,11 @@ export function registrationConfigOf(configuration: EffectiveConfiguration): Reg
         requiredOutputs: strings(asObject(step).required_outputs),
       })),
     })),
-    templates: configuration.templates.map((template) => ({
+    templates: configuration.templates.map((template, position) => ({
       id: asString(template.id),
       version: asString(template.version),
       artifactType: asString(template.artifact_type),
+      release: (origins.get(`/templates/${position}`) ?? "").startsWith("core/"),
     })),
     templateSelections: Object.fromEntries(
       Object.entries(asObject(application.template_selections)).map(([type, id]) => [type, asString(id)]),
@@ -129,16 +134,17 @@ function checkIds(out: Findings, label: string, ids: readonly string[]): void {
 function checkSchema(out: Findings, kind: SchemaKind, value: unknown, path: string): void {
   const result = validateAgainstSchema(kind, value);
   for (const issue of result.issues) {
+    const where = issue.instancePath === "" ? "" : ` at ${issue.instancePath}`;
     out.error(
       "REGISTER_RECORD_INVALID",
-      `the ${kind} record would be invalid: ${issue.message}${issue.instancePath ? ` at ${issue.instancePath}` : ""}`,
+      `the ${kind} record would be invalid: ${issue.message}${where}`,
       "Report this as a defect; the command should have refused the input earlier.",
       path,
     );
   }
 }
 
-const unique = (items: readonly string[]): string[] => [...new Set(items)].sort();
+const unique = (items: readonly string[]): string[] => [...new Set(items)].sort(compareCodePoints);
 
 // ---------------------------------------------------------------------------------------------------
 // change init
@@ -324,10 +330,11 @@ function selectTemplate(
   }
   const ofType = config.templates.filter((template) => template.artifactType === type);
   const chosenId = config.templateSelections[type];
-  // The application's selection wins; otherwise the release's own template for the type.
+  // The application's selection wins; otherwise the release's own template for the type. Whether a
+  // template is the release's comes from where it was loaded, not from what its ID looks like.
   const match =
     chosenId === undefined
-      ? ofType.filter((template) => template.id.startsWith("core."))
+      ? ofType.filter((template) => template.release)
       : ofType.filter((template) => template.id === chosenId);
   if (match.length !== 1 || !match[0]) {
     out.error(
