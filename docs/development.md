@@ -26,6 +26,26 @@ node packages/cli/src/main.ts doctor --root /absolute/path/to/design-repo --json
 node packages/cli/src/main.ts config resolve --root /absolute/path/to/design-repo --json
 ```
 
+Two commands write to the design repository (B06). Both refuse a configuration or lock that doesn't resolve, never replace an existing file, and write through a temporary file and an atomic rename:
+
+```sh
+# Create changes/CHANGE-100/change.json and an empty traceability.json
+node packages/cli/src/main.ts change init --root /abs/design-repo \
+  --id CHANGE-100 --workflow core.feature-design --title "Dashboard API" --json
+
+# Register an artifact whose content is already saved in the change's content/ folder
+node packages/cli/src/main.ts artifact register --root /abs/design-repo \
+  --id DESIGN-100 --type engineering-design --owner-role engineering \
+  --change CHANGE-100 --content changes/CHANGE-100/content/design.md --json
+
+# Register a project-scoped (shared) artifact: no change owner, content under shared/content/
+node packages/cli/src/main.ts artifact register --root /abs/design-repo \
+  --id SHARED-100 --type contract --owner-role architecture \
+  --scope project --content shared/content/errors.md --json
+```
+
+`change init` defaults the change's owner roles to the roles the application profile names (reviewer roles and repository owner roles); pass `--owner-role` to choose. `artifact register` fills the workflow step from the change's workflow when exactly one step produces the artifact type (otherwise pass `--step`), and builds the context receipt from `--depends-on` and `--source` using the digests the store holds now. New artifacts are always drafts: readiness needs the rule engine (B07).
+
 With `--json`, stdout carries exactly one result envelope: the run-report fields from `run.schema.json` plus `result`, the command's own data. The exit codes follow design doc 07: 0 ok, 1 gate failed, 2 invalid configuration or invocation, 3 capability unavailable, 4 stale or conflicting lock, 5 internal error.
 
 From source there is no engine bundle to hash, so `doctor` always reports the engine as unverified (exit 3). The release build (B11) bundles the CLI and binds the engine digest.

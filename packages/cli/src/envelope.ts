@@ -76,7 +76,7 @@ export interface EnvelopeParts {
   root: string;
   frameworkVersion: string;
   /** Command options that change the result, without the root path. */
-  options: Record<string, string | boolean | null>;
+  options: Record<string, string | boolean | null | string[]>;
   /** Input digests included in the run fingerprint, such as the effective-config provenance. */
   inputs: ReadonlyArray<{ origin: string; sha256: string }>;
   diagnostics: readonly Diagnostic[];
